@@ -56,6 +56,17 @@ def generate_market_chart(df, output_path):
         # 4% Threshold Line
         apds.append(mpf.make_addplot(np.full(len(df), 4.0), panel=3, color='orange', linestyle='--', width=1.0, secondary_y=False))
 
+    # --- Climax Buy Arrows (Panel 0) ---
+    if 'Climax_Entry' in df.columns:
+        # Create a series with NaN where False, and Price Low where True
+        climax_signals = df['Climax_Entry'].astype(bool)
+        # Position slightly below Low
+        climax_markers = np.where(climax_signals, df['Low'] * 0.98, np.nan)
+
+        # Only add plot if there are any signals
+        if not np.all(np.isnan(climax_markers)):
+             apds.append(mpf.make_addplot(climax_markers, type='scatter', markersize=100, marker='^', color='blue', panel=0))
+
     # --- Trend Background Logic ---
     # We use fill_between logic with mpf.make_addplot
     # We need dummy series for fill_between

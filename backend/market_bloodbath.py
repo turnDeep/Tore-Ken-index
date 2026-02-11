@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 STOCK_CSV = os.path.join(os.path.dirname(__file__), 'stock.csv')
 HISTORY_PERIOD = "2y"  # 2 years to calculate 52-week low (1 year window) + 1 year history
 
+# Climax Logic Constants
+CLIMAX_THRESHOLD_DAILY = 20.0
+ENTRY_LAG_DAYS = 22
+
 def get_tickers():
     """Reads tickers from stock.csv"""
     try:
@@ -96,13 +100,18 @@ def calculate_market_bloodbath_data():
         # Ensure index is DatetimeIndex and sorted
         result.sort_index(inplace=True)
 
+        # Calculate Climax Signals (on full history to support lag)
+        result['Is_Climax'] = result['New_Lows_Ratio'] >= CLIMAX_THRESHOLD_DAILY
+        # Climax Entry is shifted by ENTRY_LAG_DAYS
+        result['Climax_Entry'] = result['Is_Climax'].shift(ENTRY_LAG_DAYS).fillna(False)
+
         # Filter for the last 1 year (or return all, caller can slice)
         # User said "1 year of bloodbath". Let's return last 365 days.
         cutoff_date = result.index.max() - pd.Timedelta(days=365)
         result = result[result.index >= cutoff_date]
 
         logger.info(f"Calculated Bloodbath data for {len(result)} days.")
-        return result[['New_Lows_Ratio']]
+        return result[['New_Lows_Ratio', 'Climax_Entry']]
 
     except Exception as e:
         logger.error(f"Error calculating market bloodbath: {e}")

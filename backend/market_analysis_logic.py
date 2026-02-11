@@ -214,11 +214,14 @@ def get_market_analysis_data(ticker="SPY", period="6mo"):
                 df = df.join(bloodbath_df, how='left')
                 # Fill NaN with 0 or previous value? Fill 0 for safety if missing.
                 df['New_Lows_Ratio'] = df['New_Lows_Ratio'].fillna(0.0)
+                df['Climax_Entry'] = df['Climax_Entry'].fillna(False)
             else:
                 df['New_Lows_Ratio'] = 0.0
+                df['Climax_Entry'] = False
         except Exception as e:
             logger.error(f"Failed to integrate bloodbath data: {e}")
             df['New_Lows_Ratio'] = 0.0
+            df['Climax_Entry'] = False
 
         # Generate Trend Signal for Chart Generator (1: Bull, -1: Bear, 0: Neutral)
         conditions = [df['Bullish_Phase'] == True, df['Bearish_Phase'] == True]
@@ -280,6 +283,7 @@ def get_market_analysis_data(ticker="SPY", period="6mo"):
                 "market_status": status_color,
                 "status_text": status_text,
                 "new_lows_ratio": float(df['New_Lows_Ratio'].iloc[i]) if 'New_Lows_Ratio' in df.columns and not pd.isna(df['New_Lows_Ratio'].iloc[i]) else 0.0,
+                "climax_entry": bool(df['Climax_Entry'].iloc[i]) if 'Climax_Entry' in df.columns else False,
                 # Add Divergence Data
                 "bull_div_prev": int(df['Bullish_Divergence'].iloc[i]) if pd.notna(df['Bullish_Divergence'].iloc[i]) else None,
                 "bear_div_prev": int(df['Bearish_Divergence'].iloc[i]) if pd.notna(df['Bearish_Divergence'].iloc[i]) else None
