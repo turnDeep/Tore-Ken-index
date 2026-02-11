@@ -49,6 +49,13 @@ def generate_market_chart(df, output_path):
         apds.append(mpf.make_addplot(df['Fast_K'], panel=2, color='cyan', width=1.2, ylabel='StochRSI'))
         apds.append(mpf.make_addplot(df['Slow_D'], panel=2, color='orange', width=1.2))
 
+    # --- Panel 3: Market Bloodbath ---
+    if 'New_Lows_Ratio' in df.columns:
+        # Bloodbath line
+        apds.append(mpf.make_addplot(df['New_Lows_Ratio'], panel=3, color='blue', width=1.5, ylabel='Bloodbath %'))
+        # 4% Threshold Line
+        apds.append(mpf.make_addplot(np.full(len(df), 4.0), panel=3, color='orange', linestyle='--', width=1.0, secondary_y=False))
+
     # --- Trend Background Logic ---
     # We use fill_between logic with mpf.make_addplot
     # We need dummy series for fill_between
@@ -61,17 +68,27 @@ def generate_market_chart(df, output_path):
     # Bearish (Red Signal) -> Red background
 
     if 'Bullish_Phase' in df.columns and 'Bearish_Phase' in df.columns:
-        # Create condition arrays
-        # Ensure boolean type
-        bull_cond = df['Bullish_Phase'].astype(bool).values
-        bear_cond = df['Bearish_Phase'].astype(bool).values
+        pass
 
-        # Add simplified background fill (using fill_between arguments in plot function is cleaner, but addplot supports it too)
-        # Using a collection for fill_between
+    # Prepare Fill Between List
+    fill_between_list = []
 
-        # Note: mplfinance fill_between logic in addplot requires y1, y2
-        # We can add invisible plots that fill between them
-        pass # Logic handled below via 'fill_between' dict in addplot
+    if 'Bullish_Phase' in df.columns:
+         # Bullish Phase (Green Trend)
+         fill_between_list.append(dict(y1=y_high, y2=y_low, where=df['Bullish_Phase'].values, color='skyblue', alpha=0.1))
+         # Bearish Phase (Red Trend)
+         fill_between_list.append(dict(y1=y_high, y2=y_low, where=df['Bearish_Phase'].values, color='red', alpha=0.1))
+
+    if 'New_Lows_Ratio' in df.columns:
+         # Bloodbath Background (Light Purple) when > 4%
+         bb_cond = (df['New_Lows_Ratio'] > 4.0).values
+         # Higher alpha to make it visible over the trend color
+         fill_between_list.append(dict(y1=y_high, y2=y_low, where=bb_cond, color='violet', alpha=0.3))
+
+    # Panel Ratios
+    ratios = (6, 2, 2)
+    if 'New_Lows_Ratio' in df.columns:
+        ratios = (6, 2, 2, 2)
 
     # Style
     mc = mpf.make_marketcolors(up='green', down='red', inherit=True)
@@ -86,15 +103,12 @@ def generate_market_chart(df, output_path):
             style=s,
             addplot=apds,
             volume=False,
-            panel_ratios=(6, 2, 2), # Adjusted ratios for better visibility
+            panel_ratios=ratios, # Adjusted ratios
             title="",
             returnfig=True,
-            figsize=(10, 12),
+            figsize=(10, 14), # Increased height for extra panel
             tight_layout=True,
-            fill_between=[
-                dict(y1=y_high, y2=y_low, where=df['Bullish_Phase'].values, color='skyblue', alpha=0.1),
-                dict(y1=y_high, y2=y_low, where=df['Bearish_Phase'].values, color='red', alpha=0.1)
-            ] if 'Bullish_Phase' in df.columns else None
+            fill_between=fill_between_list if fill_between_list else None
         )
 
         # --- Draw Divergence Lines ---
