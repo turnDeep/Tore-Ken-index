@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def generate_market_chart(df, output_path):
     """
-    Generates the Market Analysis chart (SPY) with trend background colors.
+    Generates the Market Analysis chart (SPY) with trend background colors and divergence lines.
     """
     if df.empty:
         logger.error("No market data to plot")
@@ -27,11 +27,13 @@ def generate_market_chart(df, output_path):
     apds = []
 
     # --- Panel 1: TSV (Approx) ---
+    # Determine which column holds TSV (df['TSV'])
     if 'TSV' in df.columns:
         # TSV line color: Teal (similar to image)
         apds.append(mpf.make_addplot(df['TSV'], panel=1, color='teal', width=1.5, ylabel='TSV'))
-        if 'TSV_MA' in df.columns:
-            apds.append(mpf.make_addplot(df['TSV_MA'], panel=1, color='orange', width=1.0))
+
+        # Add a zero line for TSV
+        apds.append(mpf.make_addplot(np.zeros(len(df)), panel=1, color='gray', linestyle='--', width=0.8, secondary_y=False))
 
     # --- Panel 2: StochRSI ---
     # Fast_K: Cyan, Slow_D: Orange
@@ -46,78 +48,124 @@ def generate_market_chart(df, output_path):
     if 'Fast_K' in df.columns and 'Slow_D' in df.columns:
         apds.append(mpf.make_addplot(df['Fast_K'], panel=2, color='cyan', width=1.2, ylabel='StochRSI'))
         apds.append(mpf.make_addplot(df['Slow_D'], panel=2, color='orange', width=1.2))
-    # Fallback to StochRSI_K/D if provided
-    elif 'StochRSI_K' in df.columns and 'StochRSI_D' in df.columns:
-        apds.append(mpf.make_addplot(df['StochRSI_K'], panel=2, color='cyan', width=1.2, ylabel='StochRSI'))
-        apds.append(mpf.make_addplot(df['StochRSI_D'], panel=2, color='orange', width=1.2))
 
     # --- Trend Background Logic ---
-    if 'Trend_Signal' in df.columns:
-        signal = df['Trend_Signal']
-        y_high = df['High'].max() * 1.05
-        y_low = df['Low'].min() * 0.95
+    # We use fill_between logic with mpf.make_addplot
+    # We need dummy series for fill_between
 
-        # Bullish (Green Signal) -> Cyan/SkyBlue background
-        apds.append(mpf.make_addplot(
-            np.full(len(df), y_high),
-            panel=0,
-            color='g',
-            alpha=0.0,
-            secondary_y=False,
-            fill_between=dict(y1=y_high, y2=y_low, where=signal.values==1, color='skyblue', alpha=0.15)
-        ))
+    # Calculate Y-axis limits for background fill
+    y_high = df['High'].max() * 1.05
+    y_low = df['Low'].min() * 0.95
 
-        # Bearish (Red Signal) -> Red background
-        apds.append(mpf.make_addplot(
-            np.full(len(df), y_high),
-            panel=0,
-            color='r',
-            alpha=0.0,
-            secondary_y=False,
-            fill_between=dict(y1=y_high, y2=y_low, where=signal.values==-1, color='red', alpha=0.15)
-        ))
+    # Bullish (Green Signal) -> Cyan/SkyBlue background
+    # Bearish (Red Signal) -> Red background
+
+    if 'Bullish_Phase' in df.columns and 'Bearish_Phase' in df.columns:
+        # Create condition arrays
+        # Ensure boolean type
+        bull_cond = df['Bullish_Phase'].astype(bool).values
+        bear_cond = df['Bearish_Phase'].astype(bool).values
+
+        # Add simplified background fill (using fill_between arguments in plot function is cleaner, but addplot supports it too)
+        # Using a collection for fill_between
+
+        # Note: mplfinance fill_between logic in addplot requires y1, y2
+        # We can add invisible plots that fill between them
+        pass # Logic handled below via 'fill_between' dict in addplot
 
     # Style
     mc = mpf.make_marketcolors(up='green', down='red', inherit=True)
     s = mpf.make_mpf_style(marketcolors=mc, gridstyle=':', y_on_right=True)
 
+    # Plot
     try:
+        # Create figure first to allow custom plotting (lines) on axes
         fig, axlist = mpf.plot(
             df,
             type='candle',
             style=s,
             addplot=apds,
-            volume=False, # Volume usually not on SPY analysis chart or simplified
-            panel_ratios=(6, 1, 1),
+            volume=False,
+            panel_ratios=(6, 2, 2), # Adjusted ratios for better visibility
             title="",
             returnfig=True,
-            figsize=(10, 13),
-            tight_layout=False,
+            figsize=(10, 12),
+            tight_layout=True,
+            fill_between=[
+                dict(y1=y_high, y2=y_low, where=df['Bullish_Phase'].values, color='skyblue', alpha=0.1),
+                dict(y1=y_high, y2=y_low, where=df['Bearish_Phase'].values, color='red', alpha=0.1)
+            ] if 'Bullish_Phase' in df.columns else None
         )
 
-        # Enforce fixed margins for frontend alignment (retained from legacy)
-        left_margin = 0.05
-        right_boundary = 0.88
-        plot_width = right_boundary - left_margin
+        # --- Draw Divergence Lines ---
+        # axlist structure:
+        # axlist[0] = Main Price Axis (Candlesticks)
+        # axlist[2] = Panel 1 (TSV)
+        # axlist[4] = Panel 2 (StochRSI)
 
-        for ax in axlist:
-            pos = ax.get_position()
-            ax.set_position([left_margin, pos.y0, plot_width, pos.height])
+        ax_price = axlist[0]
+        ax_tsv = axlist[2]
 
-        # Add horizontal lines for indicators
-        if len(axlist) >= 5: # 0:Main, 2:Panel1, 4:Panel2 (indices jump due to secondary axes?)
-            # Usually: axlist[0]=Main, axlist[2]=Panel1, axlist[4]=Panel2 if no secondary y on main
-            # With fill_between on Main, indices might shift? No, addplot doesn't add axes unless new panel.
+        if 'Bullish_Divergence' in df.columns:
+            # Iterate through rows where Bullish_Divergence is not None
+            # The value is the index of the previous pivot
 
-            # Find axes by panel index assuming standard order
-            # The indices in axlist returned by mpf.plot depend on the panels created.
-            # 3 panels -> at least 3 axes.
-            pass
+            # Reset index to integer for plotting if needed, but mplfinance uses dates on x-axis usually?
+            # Actually, mplfinance plots against an integer index internally if dates are non-linear (weekends skipped).
+            # But here we can use the integer index from 0 to len(df)-1 logic if we are careful.
+            # mpf.plot aligns data on 0..N-1 x-axis.
+
+            for i in range(len(df)):
+                prev_idx = df['Bullish_Divergence'].iloc[i]
+                if pd.notna(prev_idx):
+                    prev_idx = int(prev_idx)
+                    curr_idx = i
+
+                    # Coordinates for Price Line (Green)
+                    # X: indices, Y: Close prices
+                    # Note: We use Low price for Bullish Divergence placement usually
+                    y1 = df['Low'].iloc[prev_idx]
+                    y2 = df['Low'].iloc[curr_idx]
+
+                    ax_price.plot([prev_idx, curr_idx], [y1, y2], color='green', linewidth=2, linestyle='-')
+
+                    # Coordinates for TSV Line (Green)
+                    tsv1 = df['TSV'].iloc[prev_idx]
+                    tsv2 = df['TSV'].iloc[curr_idx]
+                    ax_tsv.plot([prev_idx, curr_idx], [tsv1, tsv2], color='green', linewidth=1.5, linestyle='--')
+
+                    # Add 'B' Label
+                    ax_price.annotate('B', (curr_idx, y2), textcoords="offset points", xytext=(0,-15),
+                                      ha='center', color='green', fontsize=9, fontweight='bold')
+
+        if 'Bearish_Divergence' in df.columns:
+            for i in range(len(df)):
+                prev_idx = df['Bearish_Divergence'].iloc[i]
+                if pd.notna(prev_idx):
+                    prev_idx = int(prev_idx)
+                    curr_idx = i
+
+                    # Coordinates for Price Line (Red)
+                    # Use High price for Bearish
+                    y1 = df['High'].iloc[prev_idx]
+                    y2 = df['High'].iloc[curr_idx]
+
+                    ax_price.plot([prev_idx, curr_idx], [y1, y2], color='red', linewidth=2, linestyle='-')
+
+                    # Coordinates for TSV Line (Red)
+                    tsv1 = df['TSV'].iloc[prev_idx]
+                    tsv2 = df['TSV'].iloc[curr_idx]
+                    ax_tsv.plot([prev_idx, curr_idx], [tsv1, tsv2], color='red', linewidth=1.5, linestyle='--')
+
+                    # Add 'B' Label (Bear)
+                    ax_price.annotate('B', (curr_idx, y2), textcoords="offset points", xytext=(0,10),
+                                      ha='center', color='red', fontsize=9, fontweight='bold')
 
         fig.savefig(output_path, bbox_inches='tight', dpi=100)
         plt.close(fig)
         logger.info(f"Market chart generated at {output_path}")
         return True
+
     except Exception as e:
         logger.error(f"Error generating market chart: {e}")
         return False
