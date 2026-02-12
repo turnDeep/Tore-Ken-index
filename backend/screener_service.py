@@ -23,12 +23,9 @@ LATEST_JSON_PATH = os.path.join(DATA_DIR, 'latest.json')
 
 def run_calculation_scripts():
     """Runs the calculation scripts as subprocesses."""
-    # Vol Adj RS and RTI removed as requested
     scripts = [
         "backend/calculate_atr_trailing_stop.py",
         "backend/calculate_rs_percentile_histogram.py",
-        # "backend/calculate_rs_volatility_adjusted.py",
-        # "backend/calculate_rti.py",
         "backend/calculate_zone_rs.py"
     ]
 
@@ -146,12 +143,10 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
     # 1. Load Data
     atr_data = load_pickle("atr_trailing_stop_weekly.pkl")
     rs_perc_data = load_pickle("rs_percentile_histogram_weekly.pkl")
-    rs_vol_data = load_pickle("rs_volatility_adjusted_weekly.pkl")
     zone_data = load_pickle("zone_rs_weekly.pkl")
-    rti_data = load_pickle("rti_weekly.pkl")
     price_data = load_pickle("price_data_ohlcv.pkl")
 
-    if atr_data is None or rs_perc_data is None or rs_vol_data is None or zone_data is None or rti_data is None or price_data is None:
+    if atr_data is None or rs_perc_data is None or zone_data is None or price_data is None:
         logger.error("Missing calculation data. Aborting screening.")
         return []
 
@@ -189,7 +184,7 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
         # Prepare data series
         atr_state = atr_data["Trend_State"]
         rs_perc = rs_perc_data["Percentile_1M"]
-        rs_ma = rs_vol_data["RS_MA"]
+        # rs_ma = rs_vol_data["RS_MA"] # Removed
         zone_vals = zone_data["Zone"]
 
         entry_candidates = set() # (ticker, entry_date)
@@ -209,17 +204,17 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
                 perc = get_latest(rs_perc, ticker)
                 zone = get_latest(zone_vals, ticker)
 
-                slope = None
-                if ticker in rs_ma.columns:
-                    ma_series = rs_ma[ticker].dropna()
-                    if len(ma_series) >= 2:
-                        slope = ma_series.iloc[-1] - ma_series.iloc[-2]
+                # slope = None # Removed dependency on RS_MA
+                # if ticker in rs_ma.columns:
+                #     ma_series = rs_ma[ticker].dropna()
+                #     if len(ma_series) >= 2:
+                #         slope = ma_series.iloc[-1] - ma_series.iloc[-2]
 
                 # --- Entry Logic ---
                 is_new_entry = False
+                # Simplified entry logic without slope (since RS_MA is gone)
                 if (t_state == 3 and
                     perc is not None and perc >= 80 and
-                    slope is not None and slope > 0 and
                     zone == 3):
                     is_new_entry = True
 
@@ -227,9 +222,11 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
                     if ticker in old_tracked_map:
                         entry_date = old_tracked_map[ticker]
                     else:
-                        entry_date = calculate_entry_date(ticker, atr_state, rs_perc, rs_ma, zone_vals)
-                        if not entry_date:
-                            entry_date = datetime.datetime.now().strftime('%Y-%m-%d') # Fallback
+                        # Cannot calculate entry date accurately without RS_MA slope history in old logic
+                        # Fallback to simple check or current date
+                        # entry_date = calculate_entry_date(ticker, atr_state, rs_perc, rs_ma, zone_vals)
+                        # Fallback:
+                        entry_date = datetime.datetime.now().strftime('%Y-%m-%d') # Fallback
 
                     entry_candidates.add((ticker, entry_date))
 
@@ -258,8 +255,8 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
     # --- Build Output with Metrics (Updated Daily) ---
     strong_stocks = []
 
-    rti_vals = rti_data["RTI_Values"]
-    rti_sigs = rti_data["RTI_Signals"]
+    # rti_vals = rti_data["RTI_Values"] # Removed
+    # rti_sigs = rti_data["RTI_Signals"] # Removed
 
     def get_latest_val(df_or_series, ticker):
         if ticker not in df_or_series.columns: return None
@@ -300,9 +297,9 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
             return 0.0
 
     for ticker, e_date in final_stocks.items():
-        rti = get_latest_val(rti_vals, ticker)
-        rti_signal = get_latest_val(rti_sigs, ticker)
-        is_orange_dot = (rti_signal == 2)
+        # rti = get_latest_val(rti_vals, ticker)
+        # rti_signal = get_latest_val(rti_sigs, ticker)
+        # is_orange_dot = (rti_signal == 2)
 
         price = get_price_info(ticker)
         adr_pct = calculate_adr_pct(ticker)
@@ -312,8 +309,8 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
 
         stock_obj = {
             "ticker": ticker,
-            "rti": round(rti, 2) if rti is not None else 0.0,
-            "is_orange_dot": bool(is_orange_dot),
+            "rti": 0.0, # Placeholder
+            "is_orange_dot": False, # Placeholder
             "current_price": round(price, 2),
             "adr_pct": round(adr_pct, 2),
             "rvol": 0.0,

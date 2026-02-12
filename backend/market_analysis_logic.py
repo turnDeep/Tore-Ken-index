@@ -152,8 +152,8 @@ def detect_cycle_phases(df):
 
 def get_market_analysis_data(ticker="SPY", period="6mo"):
     """
-    Fetches SPY data, calculates indicators, and returns a list of dictionaries.
-    Returns: (list_of_dicts, spy_dataframe)
+    Fetches data for the given ticker, calculates indicators, and returns a list of dictionaries.
+    Returns: (list_of_dicts, dataframe)
     """
     try:
         # Use simple download.
