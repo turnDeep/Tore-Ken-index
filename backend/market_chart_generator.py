@@ -26,6 +26,17 @@ def generate_market_chart(df, output_path):
     # Prepare AddPlots
     apds = []
 
+    # --- Panel 0: Dual Bollinger Bands ---
+    if 'BB1_Basis' in df.columns:
+        apds.append(mpf.make_addplot(df['BB1_Basis'], panel=0, color='#2962FF', width=1.0))
+        apds.append(mpf.make_addplot(df['BB1_Upper'], panel=0, color='#F23645', width=1.0))
+        apds.append(mpf.make_addplot(df['BB1_Lower'], panel=0, color='#089981', width=1.0))
+
+    if 'BB2_Basis' in df.columns:
+        apds.append(mpf.make_addplot(df['BB2_Basis'], panel=0, color='#7B1FA2', width=1.0))
+        apds.append(mpf.make_addplot(df['BB2_Upper'], panel=0, color='#FF6D00', width=1.0))
+        apds.append(mpf.make_addplot(df['BB2_Lower'], panel=0, color='#00ACC1', width=1.0))
+
     # --- Panel 1: TSV (Approx) ---
     # Determine which column holds TSV (df['TSV'])
     if 'TSV' in df.columns:
@@ -89,6 +100,15 @@ def generate_market_chart(df, output_path):
          fill_between_list.append(dict(y1=y_high, y2=y_low, where=df['Bullish_Phase'].values, color='skyblue', alpha=0.1))
          # Bearish Phase (Red Trend)
          fill_between_list.append(dict(y1=y_high, y2=y_low, where=df['Bearish_Phase'].values, color='red', alpha=0.1))
+
+    # BB Fills
+    if 'BB1_Upper' in df.columns:
+         # RGB(33,150,243) -> #2196F3
+         fill_between_list.append(dict(y1=df['BB1_Upper'].values, y2=df['BB1_Lower'].values, color='#2196F3', alpha=0.1))
+
+    if 'BB2_Upper' in df.columns:
+         # RGB(156,39,176) -> #9C27B0
+         fill_between_list.append(dict(y1=df['BB2_Upper'].values, y2=df['BB2_Lower'].values, color='#9C27B0', alpha=0.1))
 
     if 'New_Lows_Ratio' in df.columns:
          # Bloodbath Background (Light Purple) when > 4%

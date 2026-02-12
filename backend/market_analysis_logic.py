@@ -16,6 +16,14 @@ def calculate_wma(series, length):
     sum_weights = weights.sum()
     return series.rolling(window=length).apply(lambda x: np.dot(x, weights) / sum_weights, raw=True)
 
+def calculate_bollinger_bands(series, length, std_dev):
+    """Calculates Bollinger Bands."""
+    basis = series.rolling(window=length).mean()
+    std = series.rolling(window=length).std()
+    upper = basis + (std * std_dev)
+    lower = basis - (std * std_dev)
+    return basis, upper, lower
+
 def calculate_tsv_approximation(df, length=13, ma_length=3, ma_type='EMA'):
     """
     Calculates Time Segmented Volume (TSV) approximation.
@@ -180,6 +188,16 @@ def get_market_analysis_data(ticker="SPY", period="6mo", bloodbath_df=None):
         # UPDATED: Use length=13, ma_length=3 for TSV as per Pine Script
         df['TSV'] = calculate_tsv_approximation(df, length=13, ma_length=3, ma_type='EMA')
         df['Fast_K'], df['Slow_D'] = calculate_stochrsi_1op(df, rsi_length=14, stoch_length=14, k_smooth=5, d_smooth=5)
+
+        # Dual Bollinger Bands
+        # BB1: High, 19, 2.0, Offset 0
+        df['BB1_Basis'], df['BB1_Upper'], df['BB1_Lower'] = calculate_bollinger_bands(df['High'], 19, 2.0)
+
+        # BB2: Low, 19, 2.0, Offset 1
+        bb2_basis, bb2_upper, bb2_lower = calculate_bollinger_bands(df['Low'], 19, 2.0)
+        df['BB2_Basis'] = bb2_basis.shift(1)
+        df['BB2_Upper'] = bb2_upper.shift(1)
+        df['BB2_Lower'] = bb2_lower.shift(1)
 
         # Detect TSV Divergences
         bull_divs, bear_divs = detect_tsv_divergences(df, lbL=5, lbR=5, min_range=2, max_range=100)
