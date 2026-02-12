@@ -245,10 +245,14 @@ def get_market_analysis(current_user: str = Depends(get_current_user)):
     with open(path, "r", encoding='utf-8') as f:
         return json.load(f)
 
-@app.get("/api/market-chart.png")
-def get_market_chart(current_user: str = Depends(get_current_user_for_notification)):
-    """Returns the market analysis chart image. Allows cookie auth for <img> tags."""
-    path = os.path.join(DATA_DIR, "market_chart.png")
+@app.get("/api/market-chart/{filename}")
+def get_market_chart(filename: str, current_user: str = Depends(get_current_user_for_notification)):
+    """Returns a specific market chart image (e.g., market_chart_SPY.png). Allows cookie auth."""
+    # Validate filename
+    if not re.match(r'^market_chart(_[\w]+)?\.png$', filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    path = os.path.join(DATA_DIR, filename)
     if not os.path.exists(path):
          raise HTTPException(status_code=404, detail="Chart image not found.")
     return FileResponse(path)

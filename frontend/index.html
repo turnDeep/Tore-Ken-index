@@ -131,11 +131,9 @@
             <div class="market-section">
                 <h3>Market Analysis</h3>
                 <div class="market-analysis-container">
-                    <!-- Image container with relative positioning for overlay -->
-                    <div id="chart-wrapper" style="position: relative; width: 100%; overflow: hidden;">
-                        <img id="market-chart-img" src="/api/market-chart.png" alt="Market Analysis Chart" style="width: 100%; display: block;">
-                        <!-- Overlay line -->
-                        <div id="chart-cursor" style="position: absolute; top: 0; bottom: 0; width: 2px; background-color: black; border-left: 1px dashed black; opacity: 0.3; pointer-events: none; display: none;"></div>
+                    <!-- Charts Container -->
+                    <div id="charts-container">
+                        <!-- Charts will be dynamically injected here -->
                     </div>
 
                     <div class="controls-container">
@@ -148,7 +146,6 @@
 
                     <div style="text-align: center; margin-top: 10px;">
                         <span id="selected-date" class="date-display">--</span>
-                        <span id="market-status-badge" class="status-text status-neutral">--</span>
                     </div>
                 </div>
             </div>

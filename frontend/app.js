@@ -277,7 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let failedAttempts = 0;
     const MAX_ATTEMPTS = 5;
     let globalNotificationManager = null;
-    let marketHistory = [];
+    let marketHistory = []; // Primary history (usually SPY) for slider control
+    let fullHistoryMap = {}; // Map of Label -> History Array
+    let chartLabels = []; // List of available chart labels
     let currentDateIndex = -1;
 
     // ✅ 認証エラーイベントのリスナー追加
@@ -441,11 +443,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
 
-            if (data.history && data.history.length > 0) {
-                marketHistory = data.history;
+            // Detect format (Array = Old, Object = New)
+            if (Array.isArray(data.history)) {
+                fullHistoryMap = { "SPY": data.history };
+                chartLabels = ["SPY"];
+            } else if (typeof data.history === 'object') {
+                fullHistoryMap = data.history;
+                chartLabels = Object.keys(fullHistoryMap);
+                // Ensure SPY is first if present
+                if (chartLabels.includes("SPY")) {
+                    chartLabels = ["SPY", ...chartLabels.filter(k => k !== "SPY")];
+                }
+            }
+
+            if (chartLabels.length > 0) {
+                // Use first label (usually SPY) for timeline control
+                marketHistory = fullHistoryMap[chartLabels[0]];
                 currentDateIndex = marketHistory.length - 1; // Default to latest
 
-                // No Plotly rendering needed, image is loaded via HTML
+                // Render Chart Elements
+                renderChartContainers();
+
                 // Setup Controls
                 setupControls();
 
@@ -463,6 +481,75 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to fetch market analysis:", error);
         }
+    }
+
+    function renderChartContainers() {
+        const container = document.getElementById('charts-container');
+        if (!container) return;
+        container.innerHTML = ''; // Clear existing content
+
+        chartLabels.forEach(label => {
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'market-chart-section';
+            chartDiv.style.marginBottom = '20px';
+
+            // Label Title
+            const labelDiv = document.createElement('div');
+            labelDiv.textContent = label;
+            labelDiv.style.fontWeight = 'bold';
+            labelDiv.style.fontSize = '1.2em';
+            labelDiv.style.marginBottom = '5px';
+            labelDiv.style.marginLeft = '5px';
+            chartDiv.appendChild(labelDiv);
+
+            // Chart Wrapper
+            const wrapper = document.createElement('div');
+            wrapper.id = `chart-wrapper-${label}`;
+            wrapper.style.position = 'relative';
+            wrapper.style.width = '100%';
+            wrapper.style.overflow = 'hidden';
+
+            // Chart Image
+            const img = document.createElement('img');
+            img.id = `chart-img-${label}`;
+            // Use specific endpoint with timestamp to prevent caching issues on reload
+            img.src = `/api/market-chart/market_chart_${label}.png?t=${new Date().getTime()}`;
+            img.alt = `${label} Chart`;
+            img.style.width = '100%';
+            img.style.display = 'block';
+            wrapper.appendChild(img);
+
+            // Cursor Line
+            const cursor = document.createElement('div');
+            cursor.id = `chart-cursor-${label}`;
+            cursor.style.position = 'absolute';
+            cursor.style.top = '0';
+            cursor.style.bottom = '0';
+            cursor.style.width = '2px';
+            cursor.style.backgroundColor = 'black';
+            cursor.style.borderLeft = '1px dashed black';
+            cursor.style.opacity = '0.3';
+            cursor.style.pointerEvents = 'none';
+            cursor.style.display = 'none';
+            wrapper.appendChild(cursor);
+
+            chartDiv.appendChild(wrapper);
+
+            // Status Badge Container
+            const statusDiv = document.createElement('div');
+            statusDiv.style.textAlign = 'center';
+            statusDiv.style.marginTop = '5px';
+
+            const badge = document.createElement('span');
+            badge.id = `status-badge-${label}`;
+            badge.className = 'status-text status-neutral';
+            badge.textContent = '--';
+            statusDiv.appendChild(badge);
+
+            chartDiv.appendChild(statusDiv);
+
+            container.appendChild(chartDiv);
+        });
     }
 
     function setupControls() {
@@ -497,48 +584,48 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateDailyView(index) {
         currentDateIndex = index;
         const historyItem = marketHistory[index];
+        if (!historyItem) return;
         const dateKey = historyItem.date_key; // YYYYMMDD
 
         // Update Date Display
-        document.getElementById('selected-date').textContent = historyItem.date;
+        const dateEl = document.getElementById('selected-date');
+        if (dateEl) dateEl.textContent = historyItem.date;
 
-        // Update Status Badge
-        const badge = document.getElementById('market-status-badge');
-        badge.textContent = historyItem.status_text;
-        badge.className = 'status-text'; // Reset
+        // Update All Charts (Status & Cursor)
+        chartLabels.forEach(label => {
+            const hist = fullHistoryMap[label];
+            // Ensure data exists for this label at this index
+            // (Assumes synchronized length/dates, which backend ensures)
+            if (hist && hist[index]) {
+                const item = hist[index];
 
-        if (historyItem.status_text.includes("Red to")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Green to")) badge.classList.add('status-red');
-        else if (historyItem.status_text.includes("Green")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Red")) badge.classList.add('status-red');
-        else badge.classList.add('status-neutral');
+                // Update Status Badge
+                const badge = document.getElementById(`status-badge-${label}`);
+                if (badge) {
+                    badge.textContent = item.status_text;
+                    badge.className = 'status-text';
+                    if (item.status_text.includes("Red to")) badge.classList.add('status-green');
+                    else if (item.status_text.includes("Green to")) badge.classList.add('status-red');
+                    else if (item.status_text.includes("Green")) badge.classList.add('status-green');
+                    else if (item.status_text.includes("Red")) badge.classList.add('status-red');
+                    else badge.classList.add('status-neutral');
+                }
 
-        // Move Vertical Line on Image (CSS)
-        const chartWrapper = document.getElementById('chart-wrapper');
-        const cursor = document.getElementById('chart-cursor');
+                // Move Cursor
+                const cursor = document.getElementById(`chart-cursor-${label}`);
+                if (cursor) {
+                    const marginLeft = 0.05;
+                    const marginRight = 0.12;
+                    const plotWidthPct = 1.0 - marginLeft - marginRight;
+                    const count = hist.length;
+                    const pct = (index + 0.5) / count;
+                    const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
 
-        if (chartWrapper && cursor && marketHistory.length > 0) {
-            // Logic to calculate position
-            // The chart image generated by mplfinance has margins.
-            // With tight_layout and figsize(10,8), the plot area is roughly 80-90% of width.
-            // This is a rough approximation. Ideally we'd know the exact pixel bounds.
-            // Let's assume standard margins.
-
-            // Adjust these offsets based on the actual generated image appearance
-            const marginLeft = 0.05; // 5% from left
-            const marginRight = 0.12; // 12% from right
-            const plotWidthPct = 1.0 - marginLeft - marginRight;
-
-            // Calculate percentage position
-            // index 0 = left edge of plot area
-            // index max = right edge of plot area
-            const count = marketHistory.length;
-            const pct = (index + 0.5) / count;
-            const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
-
-            cursor.style.left = `${leftPos}%`;
-            cursor.style.display = 'block';
-        }
+                    cursor.style.left = `${leftPos}%`;
+                    cursor.style.display = 'block';
+                }
+            }
+        });
 
         // Fetch Daily Data (Strong Stocks)
         const contentDiv = document.getElementById('strong-stocks-content');
@@ -550,8 +637,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 renderStrongStocks(data.strong_stocks);
             } else {
-                // Check if this date is 'today' or close enough?
-                // Or simply show no data
                 contentDiv.innerHTML = '<p style="text-align: center; color: #757575;">No Strong Stocks data available for this date.</p>';
             }
         } catch (error) {

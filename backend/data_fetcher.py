@@ -9,6 +9,8 @@ from backend.security_manager import security_manager
 # Market Analysis Imports
 from backend.market_analysis_logic import get_market_analysis_data
 from backend.market_chart_generator import generate_market_chart
+from backend.market_bloodbath import calculate_market_bloodbath_data
+import pandas as pd
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Determine paths
 PROJECT_ROOT = os.getcwd()
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+MARKET_CSV = os.path.join(os.path.dirname(__file__), 'market.csv')
 
 def send_push_notifications(daily_data):
     """
@@ -118,22 +121,59 @@ def fetch_and_notify():
     logger.info("Executing fetch_and_notify (New MomentumX Logic)...")
 
     try:
-        # 1. Market Analysis (SPY)
+        # 1. Market Analysis (Multi-Ticker)
         logger.info("Generating Market Analysis Data (6 months)...")
-        # get_market_analysis_data returns (market_data_list, spy_df)
-        market_data, spy_df = get_market_analysis_data(period="6mo")
 
-        if market_data:
-            # Generate Chart Image
-            chart_path = os.path.join(DATA_DIR, "market_chart.png")
-            logger.info(f"Generating chart image at {chart_path}...")
-            generate_market_chart(spy_df, chart_path)
+        # Calculate Bloodbath Data once
+        logger.info("Calculating Market Bloodbath Data...")
+        bloodbath_df = calculate_market_bloodbath_data()
 
+        market_data_map = {}
+        primary_market_data = None # Usually SPY
+
+        if os.path.exists(MARKET_CSV):
+            try:
+                market_df = pd.read_csv(MARKET_CSV)
+                for index, row in market_df.iterrows():
+                    ticker = row['Ticker']
+                    label = row['Label']
+                    logger.info(f"Processing {label} ({ticker})...")
+
+                    data_list, df = get_market_analysis_data(ticker=ticker, period="6mo", bloodbath_df=bloodbath_df)
+
+                    if data_list:
+                        # Generate Chart Image with label suffix
+                        chart_filename = f"market_chart_{label}.png"
+                        chart_path = os.path.join(DATA_DIR, chart_filename)
+                        logger.info(f"Generating chart image at {chart_path}...")
+                        generate_market_chart(df, chart_path)
+
+                        market_data_map[label] = data_list
+
+                        # Set primary for status text (SPY preferred)
+                        if label == 'SPY':
+                            primary_market_data = data_list
+                        elif primary_market_data is None:
+                            primary_market_data = data_list
+            except Exception as e:
+                logger.error(f"Error processing market.csv: {e}")
+        else:
+            # Fallback to SPY only if market.csv missing
+            logger.warning("market.csv not found. Falling back to SPY default.")
+            data_list, df = get_market_analysis_data(period="6mo")
+            if data_list:
+                chart_path = os.path.join(DATA_DIR, "market_chart.png")
+                generate_market_chart(df, chart_path)
+                market_data_map['SPY'] = data_list
+                primary_market_data = data_list
+
+        if market_data_map:
             # Save market analysis (History)
+            # New structure: history is a dict of lists
             analysis_file = os.path.join(DATA_DIR, "market_analysis.json")
             with open(analysis_file, "w") as f:
                 json.dump({
-                    "history": market_data,
+                    "history": market_data_map,
                     "last_updated": datetime.datetime.now().isoformat()
                 }, f)
             logger.info(f"Saved {analysis_file}")
@@ -144,10 +184,10 @@ def fetch_and_notify():
         daily_data = run_screener_process()
 
         # Merge Market Status into daily_data if available
-        if daily_data and market_data:
-            latest_market = market_data[-1]
+        if daily_data and primary_market_data:
+            latest_market = primary_market_data[-1]
             daily_data['market_status'] = latest_market['market_status']
-            daily_data['status_text'] = latest_market['status_text'] # Overwrite "Screened: N" or append?
+            daily_data['status_text'] = latest_market['status_text']
             # User wants "Market Analysis is formerly displayed". The frontend uses 'status_text' for the badge.
             # screener_service sets status_text to "Screened: N".
             # We should probably combine them or prioritize Market Status.
