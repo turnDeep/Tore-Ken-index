@@ -9,6 +9,7 @@ from backend.security_manager import security_manager
 # Market Analysis Imports
 from backend.market_analysis_logic import get_market_analysis_data
 from backend.market_chart_generator import generate_market_chart
+import pandas as pd
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -118,34 +119,60 @@ def fetch_and_notify():
     logger.info("Executing fetch_and_notify (New MomentumX Logic)...")
 
     try:
-        # 1. Market Analysis (SPY)
+        # 1. Market Analysis (Multiple Tickers)
         logger.info("Generating Market Analysis Data (6 months)...")
-        # get_market_analysis_data returns (market_data_list, spy_df)
-        market_data, spy_df = get_market_analysis_data(period="6mo")
 
-        if market_data:
-            # Generate Chart Image
-            chart_path = os.path.join(DATA_DIR, "market_chart.png")
-            logger.info(f"Generating chart image at {chart_path}...")
-            generate_market_chart(spy_df, chart_path)
+        try:
+            st_df = pd.read_csv("short_term_ticker.csv")
+            short_term_tickers = st_df['Ticker'].unique().tolist()
+        except Exception as e:
+            logger.error(f"Error reading short_term_ticker.csv: {e}")
+            short_term_tickers = ["SPY"]
 
-            # Save market analysis (History)
-            analysis_file = os.path.join(DATA_DIR, "market_analysis.json")
-            with open(analysis_file, "w") as f:
-                json.dump({
-                    "history": market_data,
-                    "last_updated": datetime.datetime.now().isoformat()
-                }, f)
-            logger.info(f"Saved {analysis_file}")
-        else:
-            logger.error("Failed to generate market data.")
+        logger.info(f"Processing Short Term Tickers: {short_term_tickers}")
 
-        # 2. MomentumX Screener
+        primary_market_data = None # Will store the first ticker's data for legacy/notification support
+
+        for i, ticker in enumerate(short_term_tickers):
+            logger.info(f"Processing {ticker}...")
+            market_data, spy_df = get_market_analysis_data(ticker=ticker, period="6mo")
+
+            if market_data:
+                # Generate Chart Image: {Ticker}_market_chart.png
+                chart_path = os.path.join(DATA_DIR, f"{ticker}_market_chart.png")
+                generate_market_chart(spy_df, chart_path)
+
+                # Save Data: {Ticker}_market_analysis.json
+                analysis_file = os.path.join(DATA_DIR, f"{ticker}_market_analysis.json")
+                with open(analysis_file, "w") as f:
+                    json.dump({
+                        "ticker": ticker,
+                        "history": market_data,
+                        "last_updated": datetime.datetime.now().isoformat()
+                    }, f)
+
+                # If first ticker, save as legacy 'market_chart.png' and 'market_analysis.json' for backward compatibility
+                if i == 0:
+                    primary_market_data = market_data
+
+                    # Legacy Image
+                    legacy_chart_path = os.path.join(DATA_DIR, "market_chart.png")
+                    generate_market_chart(spy_df, legacy_chart_path)
+
+                    # Legacy JSON
+                    legacy_analysis_file = os.path.join(DATA_DIR, "market_analysis.json")
+                    with open(legacy_analysis_file, "w") as f:
+                        json.dump({
+                            "history": market_data,
+                            "last_updated": datetime.datetime.now().isoformat()
+                        }, f)
+
+        # 2. MomentumX Screener (Long Term Charts)
         daily_data = run_screener_process()
 
-        # Merge Market Status into daily_data if available
-        if daily_data and market_data:
-            latest_market = market_data[-1]
+        # Merge Market Status into daily_data if available (Using Primary Ticker)
+        if daily_data and primary_market_data:
+            latest_market = primary_market_data[-1]
             daily_data['market_status'] = latest_market['market_status']
             daily_data['status_text'] = latest_market['status_text'] # Overwrite "Screened: N" or append?
             # User wants "Market Analysis is formerly displayed". The frontend uses 'status_text' for the badge.

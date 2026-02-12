@@ -326,16 +326,26 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
     return strong_stocks
 
 def generate_charts(stock_list, data_date=None):
-    """Generates charts."""
+    """Generates charts based on long_term_ticker.csv."""
     generator = RDTChartGenerator()
 
-    # 1. Generate QQQ Strong Stock Chart (Always)
+    # Read long_term_ticker.csv
     try:
-        logger.info("Generating QQQ Strong Stock Chart...")
-        qqq_filename = os.path.join(DATA_DIR, "QQQ_strong_stock.png")
-        generator.generate_chart("QQQ", qqq_filename)
+        ticker_df = pd.read_csv("long_term_ticker.csv")
+        long_term_tickers = ticker_df['Ticker'].unique().tolist()
     except Exception as e:
-        logger.error(f"Failed to generate QQQ chart: {e}")
+        logger.error(f"Error reading long_term_ticker.csv: {e}")
+        long_term_tickers = ["QQQ"] # Fallback
+
+    logger.info(f"Generating Long Term Charts for: {long_term_tickers}")
+
+    for ticker in long_term_tickers:
+        try:
+            logger.info(f"Generating {ticker} Strong Stock Chart...")
+            filename = os.path.join(DATA_DIR, f"{ticker}_strong_stock.png")
+            generator.generate_chart(ticker, filename)
+        except Exception as e:
+            logger.error(f"Failed to generate {ticker} chart: {e}")
 
     # Individual stock chart generation removed as requested
     # if not stock_list:

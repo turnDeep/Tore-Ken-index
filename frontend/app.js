@@ -434,126 +434,179 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Dashboard Functions (Refactored) ---
 
+    // State management for multiple charts
+    const dashboardState = {
+        charts: {} // { ticker: { history: [], currentIndex: 0 } }
+    };
+
     async function fetchDataAndRender() {
         try {
-            const response = await fetchWithAuth('/api/market-analysis');
-            if (!response.ok) throw new Error("Failed to load market analysis");
+            // 1. Fetch Config
+            const configRes = await fetchWithAuth('/api/config/tickers');
+            if (!configRes.ok) throw new Error("Failed to load config");
+            const config = await configRes.json();
 
-            const data = await response.json();
+            const dynamicContainer = document.getElementById('dashboard-dynamic-content');
+            dynamicContainer.innerHTML = ''; // Clear
+
+            // 2. Render Short Term Charts
+            for (const ticker of config.short_term) {
+                await renderMarketAnalysisSection(ticker, dynamicContainer);
+            }
+
+            // 3. Render Long Term Charts
+            for (const ticker of config.long_term) {
+                renderLongTermSection(ticker, dynamicContainer);
+            }
+
+        } catch (error) {
+            console.error("Failed to initialize dashboard:", error);
+        }
+    }
+
+    async function renderMarketAnalysisSection(ticker, container) {
+        // Create HTML Structure
+        const section = document.createElement('div');
+        section.className = 'market-section';
+        section.innerHTML = `
+            <h3>Market Analysis (${ticker})</h3>
+            <div class="market-analysis-container">
+                <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
+                    <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
+                    <div id="cursor-${ticker}" style="position: absolute; top: 0; bottom: 0; width: 2px; background-color: black; border-left: 1px dashed black; opacity: 0.3; pointer-events: none; display: none;"></div>
+                </div>
+
+                <div class="controls-container">
+                    <button id="prev-${ticker}" class="control-btn">&lt;</button>
+                    <div class="slider-container">
+                            <input type="range" id="slider-${ticker}" min="0" max="0" value="0" style="width: 100%;">
+                    </div>
+                    <button id="next-${ticker}" class="control-btn">&gt;</button>
+                </div>
+
+                <div style="text-align: center; margin-top: 10px;">
+                    <span id="date-${ticker}" class="date-display">--</span>
+                    <span id="status-${ticker}" class="status-text status-neutral">--</span>
+                </div>
+            </div>
+        `;
+        container.appendChild(section);
+
+        // Fetch Data
+        try {
+            const res = await fetchWithAuth(`/api/market-analysis?ticker=${ticker}`);
+            if (!res.ok) throw new Error(`Failed to load data for ${ticker}`);
+            const data = await res.json();
 
             if (data.history && data.history.length > 0) {
-                marketHistory = data.history;
-                currentDateIndex = marketHistory.length - 1; // Default to latest
+                // Initialize State
+                dashboardState.charts[ticker] = {
+                    history: data.history,
+                    currentIndex: data.history.length - 1
+                };
 
-                // No Plotly rendering needed, image is loaded via HTML
-                // Setup Controls
-                setupControls();
+                // Setup Logic
+                setupChartControls(ticker);
+                updateChartDailyView(ticker, dashboardState.charts[ticker].currentIndex);
 
-                // Load Initial Daily Data
-                updateDailyView(currentDateIndex);
-
-                // Update Last Updated
+                // Update global last updated (using first valid one)
                 const lastUpdatedEl = document.getElementById('last-updated');
                 if (lastUpdatedEl && data.last_updated) {
                     lastUpdatedEl.textContent = `Last updated: ${new Date(data.last_updated).toLocaleString('ja-JP')}`;
                 }
-
-                // Update QQQ Chart
-                const qqqImg = document.getElementById('qqq-chart-img');
-                if (qqqImg) {
-                    // Append timestamp to prevent caching
-                    const ts = new Date().getTime();
-                    qqqImg.src = `/api/stock-chart/QQQ_strong_stock.png?t=${ts}`;
-
-                    qqqImg.onerror = () => {
-                        console.log("QQQ chart not found or failed to load");
-                        const wrapper = document.getElementById('qqq-chart-wrapper');
-                        if (wrapper) wrapper.style.display = 'none';
-                    };
-                }
-            } else {
-                console.error("No history data found");
             }
-        } catch (error) {
-            console.error("Failed to fetch market analysis:", error);
+        } catch (e) {
+            console.error(e);
+            section.innerHTML += `<p style="color:red; text-align:center;">Failed to load data.</p>`;
         }
     }
 
-    function setupControls() {
-        const slider = document.getElementById('date-slider');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
+    function setupChartControls(ticker) {
+        const slider = document.getElementById(`slider-${ticker}`);
+        const prevBtn = document.getElementById(`prev-${ticker}`);
+        const nextBtn = document.getElementById(`next-${ticker}`);
+        const state = dashboardState.charts[ticker];
 
         slider.min = 0;
-        slider.max = marketHistory.length - 1;
-        slider.value = currentDateIndex;
+        slider.max = state.history.length - 1;
+        slider.value = state.currentIndex;
 
         slider.addEventListener('input', (e) => {
             const idx = parseInt(e.target.value);
-            updateDailyView(idx);
+            updateChartDailyView(ticker, idx);
         });
 
         prevBtn.addEventListener('click', () => {
-            if (currentDateIndex > 0) {
-                updateDailyView(currentDateIndex - 1);
-                slider.value = currentDateIndex;
+            if (state.currentIndex > 0) {
+                updateChartDailyView(ticker, state.currentIndex - 1);
+                slider.value = state.currentIndex;
             }
         });
 
         nextBtn.addEventListener('click', () => {
-            if (currentDateIndex < marketHistory.length - 1) {
-                updateDailyView(currentDateIndex + 1);
-                slider.value = currentDateIndex;
+            if (state.currentIndex < state.history.length - 1) {
+                updateChartDailyView(ticker, state.currentIndex + 1);
+                slider.value = state.currentIndex;
             }
         });
     }
 
-    async function updateDailyView(index) {
-        currentDateIndex = index;
-        const historyItem = marketHistory[index];
-        const dateKey = historyItem.date_key; // YYYYMMDD
+    function updateChartDailyView(ticker, index) {
+        const state = dashboardState.charts[ticker];
+        state.currentIndex = index;
+        const item = state.history[index];
 
-        // Update Date Display
-        document.getElementById('selected-date').textContent = historyItem.date;
+        // Update Date
+        document.getElementById(`date-${ticker}`).textContent = item.date;
 
-        // Update Status Badge
-        const badge = document.getElementById('market-status-badge');
-        badge.textContent = historyItem.status_text;
-        badge.className = 'status-text'; // Reset
-
-        if (historyItem.status_text.includes("Red to")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Green to")) badge.classList.add('status-red');
-        else if (historyItem.status_text.includes("Green")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Red")) badge.classList.add('status-red');
+        // Update Status
+        const badge = document.getElementById(`status-${ticker}`);
+        badge.textContent = item.status_text;
+        badge.className = 'status-text';
+        if (item.status_text.includes("Red to")) badge.classList.add('status-green');
+        else if (item.status_text.includes("Green to")) badge.classList.add('status-red');
+        else if (item.status_text.includes("Green")) badge.classList.add('status-green');
+        else if (item.status_text.includes("Red")) badge.classList.add('status-red');
         else badge.classList.add('status-neutral');
 
-        // Move Vertical Line on Image (CSS)
-        const chartWrapper = document.getElementById('chart-wrapper');
-        const cursor = document.getElementById('chart-cursor');
+        // Update Cursor
+        const cursor = document.getElementById(`cursor-${ticker}`);
+        const marginLeft = 0.05;
+        const marginRight = 0.12;
+        const plotWidthPct = 1.0 - marginLeft - marginRight;
+        const count = state.history.length;
+        const pct = (index + 0.5) / count;
+        const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
 
-        if (chartWrapper && cursor && marketHistory.length > 0) {
-            // Logic to calculate position
-            // The chart image generated by mplfinance has margins.
-            // With tight_layout and figsize(10,8), the plot area is roughly 80-90% of width.
-            // This is a rough approximation. Ideally we'd know the exact pixel bounds.
-            // Let's assume standard margins.
+        cursor.style.left = `${leftPos}%`;
+        cursor.style.display = 'block';
+    }
 
-            // Adjust these offsets based on the actual generated image appearance
-            const marginLeft = 0.05; // 5% from left
-            const marginRight = 0.12; // 12% from right
-            const plotWidthPct = 1.0 - marginLeft - marginRight;
+    function renderLongTermSection(ticker, container) {
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-top: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);';
 
-            // Calculate percentage position
-            // index 0 = left edge of plot area
-            // index max = right edge of plot area
-            const count = marketHistory.length;
-            const pct = (index + 0.5) / count;
-            const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
+        const title = document.createElement('h4');
+        title.textContent = `${ticker} Analysis (Long Term)`;
+        section.appendChild(title);
 
-            cursor.style.left = `${leftPos}%`;
-            cursor.style.display = 'block';
-        }
+        const imgWrapper = document.createElement('div');
+        const img = document.createElement('img');
+        img.alt = `${ticker} Strong Stock Chart`;
+        img.style.cssText = 'width: 100%; display: block; border: 1px solid #eee;';
 
+        // Cache busting
+        const ts = new Date().getTime();
+        img.src = `/api/stock-chart/${ticker}_strong_stock.png?t=${ts}`;
+
+        img.onerror = () => {
+            section.style.display = 'none';
+            console.log(`Missing long term chart for ${ticker}`);
+        };
+
+        imgWrapper.appendChild(img);
+        section.appendChild(imgWrapper);
+        container.appendChild(section);
     }
 
     // --- Auto Reload Function ---
