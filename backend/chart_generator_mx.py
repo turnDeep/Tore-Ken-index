@@ -16,13 +16,16 @@ class RDTChartGenerator:
             return pd.read_pickle(path)
         return None
 
-    def generate_chart(self, ticker, output_filename=None):
-        print(f"Generating chart for {ticker}...")
+    def generate_chart(self, ticker, output_filename=None, light_mode=False):
+        print(f"Generating chart for {ticker} (Light Mode: {light_mode})...")
 
         # 1. Load Data
         # Load Weekly Indicators
         zone_rs_data = self.load_pickle_data("zone_rs_weekly.pkl")
         rs_perc_data = self.load_pickle_data("rs_percentile_histogram_weekly.pkl")
+
+        # In light mode, we might skip loading heavy indicators if purely for speed,
+        # but here we just toggle display.
         rs_vol_data = self.load_pickle_data("rs_volatility_adjusted_weekly.pkl")
         rti_data = self.load_pickle_data("rti_weekly.pkl")
         atr_ts_data = self.load_pickle_data("atr_trailing_stop_weekly.pkl")
@@ -215,7 +218,7 @@ class RDTChartGenerator:
                 pass
 
         # 4. Volatility Adjusted RS (Panel 4)
-        if rs_vol_data:
+        if rs_vol_data and not light_mode:
             try:
                 rs_val = rs_vol_data["RS_Values"][ticker].reindex(valid_idx)
                 rs_ma = rs_vol_data["RS_MA"][ticker].reindex(valid_idx)
@@ -284,7 +287,7 @@ class RDTChartGenerator:
                 pass
 
         # 5. RTI (Panel 5)
-        if rti_data:
+        if rti_data and not light_mode:
             try:
                 rti_val = rti_data["RTI_Values"][ticker].reindex(valid_idx)
                 rti_sig = rti_data["RTI_Signals"][ticker].reindex(valid_idx)
@@ -354,6 +357,14 @@ class RDTChartGenerator:
         }
         s = mpf.make_mpf_style(base_mpf_style='yahoo', rc=rc_params)
 
+        # Adjust panel ratios based on mode
+        if light_mode:
+            panel_ratios = (4, 1, 1, 1) # Price, Vol, Zone, Hist
+            figsize = (12, 10) # Shorter height
+        else:
+            panel_ratios = (4, 1, 1, 1, 1, 1)
+            figsize = (12, 16)
+
         fig, axes = mpf.plot(
             plot_df,
             type='candle',
@@ -361,9 +372,9 @@ class RDTChartGenerator:
             addplot=apds,
             volume=True,
             volume_panel=1,
-            panel_ratios=(4, 1, 1, 1, 1, 1),
+            panel_ratios=panel_ratios,
             returnfig=True,
-            figsize=(12, 16),
+            figsize=figsize,
             tight_layout=True,
             title=f"{ticker} Weekly Analysis",
             datetime_format='%Y-%-m-%-d',
@@ -409,7 +420,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--ticker", type=str, required=True, help="Ticker symbol")
     parser.add_argument("-o", "--output", type=str, help="Output filename")
+    parser.add_argument("--light", action='store_true', help="Light mode (hide Vol Adj RS & RTI)")
     args = parser.parse_args()
 
     generator = RDTChartGenerator()
-    generator.generate_chart(args.ticker, args.output)
+    generator.generate_chart(args.ticker, args.output, light_mode=args.light)

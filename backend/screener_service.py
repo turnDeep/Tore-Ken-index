@@ -326,14 +326,23 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
 
 def generate_charts(stock_list, data_date=None):
     """Generates charts for all strong stocks."""
-    if not stock_list:
-        return
-
-    logger.info(f"Generating charts for {len(stock_list)} stocks...")
     generator = RDTChartGenerator()
 
     # Determine date string for filenames
     chart_date_str = data_date.strftime('%Y%m%d') if data_date else datetime.datetime.now().strftime('%Y%m%d')
+
+    # 1. Generate QQQ Light Chart (Always)
+    try:
+        logger.info("Generating QQQ Strong Stock Chart (Light Mode)...")
+        qqq_filename = os.path.join(DATA_DIR, "QQQ_strong_stock.png")
+        generator.generate_chart("QQQ", qqq_filename, light_mode=True)
+    except Exception as e:
+        logger.error(f"Failed to generate QQQ chart: {e}")
+
+    if not stock_list:
+        return
+
+    logger.info(f"Generating charts for {len(stock_list)} stocks...")
 
     for stock in stock_list:
         ticker = stock['ticker']

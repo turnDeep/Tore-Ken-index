@@ -457,6 +457,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lastUpdatedEl && data.last_updated) {
                     lastUpdatedEl.textContent = `Last updated: ${new Date(data.last_updated).toLocaleString('ja-JP')}`;
                 }
+
+                // Update QQQ Chart
+                const qqqImg = document.getElementById('qqq-chart-img');
+                if (qqqImg) {
+                    // Append timestamp to prevent caching
+                    const ts = new Date().getTime();
+                    qqqImg.src = `/api/stock-chart/QQQ_strong_stock.png?t=${ts}`;
+
+                    qqqImg.onerror = () => {
+                        console.log("QQQ chart not found or failed to load");
+                        const wrapper = document.getElementById('qqq-chart-wrapper');
+                        if (wrapper) wrapper.style.display = 'none';
+                    };
+                }
             } else {
                 console.error("No history data found");
             }
