@@ -22,12 +22,13 @@ STOCK_CSV_PATH = os.path.join(PROJECT_ROOT, 'stock.csv') # Save to root for rdt_
 LATEST_JSON_PATH = os.path.join(DATA_DIR, 'latest.json')
 
 def run_calculation_scripts():
-    """Runs the 5 calculation scripts as subprocesses."""
+    """Runs the calculation scripts as subprocesses."""
+    # Vol Adj RS and RTI removed as requested
     scripts = [
         "backend/calculate_atr_trailing_stop.py",
         "backend/calculate_rs_percentile_histogram.py",
-        "backend/calculate_rs_volatility_adjusted.py",
-        "backend/calculate_rti.py",
+        # "backend/calculate_rs_volatility_adjusted.py",
+        # "backend/calculate_rti.py",
         "backend/calculate_zone_rs.py"
     ]
 
@@ -325,32 +326,30 @@ def apply_screening_logic(is_weekend_screening=True, data_date=None):
     return strong_stocks
 
 def generate_charts(stock_list, data_date=None):
-    """Generates charts for all strong stocks."""
+    """Generates charts."""
     generator = RDTChartGenerator()
 
-    # Determine date string for filenames
-    chart_date_str = data_date.strftime('%Y%m%d') if data_date else datetime.datetime.now().strftime('%Y%m%d')
-
-    # 1. Generate QQQ Light Chart (Always)
+    # 1. Generate QQQ Strong Stock Chart (Always)
     try:
-        logger.info("Generating QQQ Strong Stock Chart (Light Mode)...")
+        logger.info("Generating QQQ Strong Stock Chart...")
         qqq_filename = os.path.join(DATA_DIR, "QQQ_strong_stock.png")
-        generator.generate_chart("QQQ", qqq_filename, light_mode=True)
+        generator.generate_chart("QQQ", qqq_filename)
     except Exception as e:
         logger.error(f"Failed to generate QQQ chart: {e}")
 
-    if not stock_list:
-        return
+    # Individual stock chart generation removed as requested
+    # if not stock_list:
+    #     return
 
-    logger.info(f"Generating charts for {len(stock_list)} stocks...")
+    # logger.info(f"Generating charts for {len(stock_list)} stocks...")
 
-    for stock in stock_list:
-        ticker = stock['ticker']
-        filename = os.path.join(DATA_DIR, f"{chart_date_str}-{ticker}.png")
-        try:
-            generator.generate_chart(ticker, filename)
-        except Exception as e:
-            logger.error(f"Failed to generate chart for {ticker}: {e}")
+    # for stock in stock_list:
+    #     ticker = stock['ticker']
+    #     filename = os.path.join(DATA_DIR, f"{chart_date_str}-{ticker}.png")
+    #     try:
+    #         generator.generate_chart(ticker, filename)
+    #     except Exception as e:
+    #         logger.error(f"Failed to generate chart for {ticker}: {e}")
 
 def run_screener_process(force_weekend_mode=False):
     """Main Orchestrator."""
