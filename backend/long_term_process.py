@@ -72,9 +72,9 @@ def generate_charts(stock_list=None, data_date=None):
     #     except Exception as e:
     #         logger.error(f"Failed to generate chart for {ticker}: {e}")
 
-def run_screener_process(force_weekend_mode=False):
-    """Main Orchestrator."""
-    logger.info("Starting Screener Process (Optimized for Chart Gen only)...")
+def run_long_term_process(force_weekend_mode=False):
+    """Main Orchestrator for Long Term Charts."""
+    logger.info("Starting Long Term Process...")
 
     # 1. Update Universe
     test_tickers = os.getenv("TEST_TICKERS")
@@ -146,4 +146,4 @@ def run_screener_process(force_weekend_mode=False):
     return output_data
 
 if __name__ == "__main__":
-    run_screener_process()
+    run_long_term_process()
