@@ -68,9 +68,15 @@ class WebSocketManager:
                     if now_et >= target_time and self.last_fetch_date != now_et.date():
                         logger.info(f"Detected post-market time ({now_et}). Triggering automatic data fetch...")
 
+                        # Determine which processes to run
+                        # Short Term: Mon-Fri
+                        run_short = True
+                        # Long Term: Friday only
+                        run_long = (now_et.weekday() == 4)
+
                         # Run fetch_and_notify in a separate thread because it's blocking/heavy
                         loop = asyncio.get_running_loop()
-                        await loop.run_in_executor(None, fetch_and_notify)
+                        await loop.run_in_executor(None, lambda: fetch_and_notify(run_short=run_short, run_long=run_long))
 
                         # Update last fetch date to prevent re-execution today
                         self.last_fetch_date = now_et.date()
