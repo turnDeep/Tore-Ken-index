@@ -5,6 +5,7 @@ import datetime
 import pandas as pd
 from backend.market_analysis_logic import get_market_analysis_data
 from backend.market_chart_generator import generate_market_chart
+from backend.market_bloodbath import calculate_market_bloodbath_data
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -31,11 +32,17 @@ def run_short_term_process():
 
     logger.info(f"Processing Short Term Tickers: {short_term_tickers}")
 
+    # Calculate Market Bloodbath Data ONCE for all tickers
+    logger.info("Calculating Market Bloodbath data (this may take a moment)...")
+    bloodbath_df = calculate_market_bloodbath_data()
+    logger.info("Market Bloodbath calculation complete.")
+
     primary_market_data = None # Will store the first ticker's data for legacy/notification support
 
     for i, ticker in enumerate(short_term_tickers):
         logger.info(f"Processing {ticker}...")
-        market_data, spy_df = get_market_analysis_data(ticker=ticker, period="6mo")
+        # Pass the pre-calculated bloodbath_df to avoid re-calculation
+        market_data, spy_df = get_market_analysis_data(ticker=ticker, period="6mo", bloodbath_df=bloodbath_df)
 
         if market_data:
             # Generate Chart Image: {Ticker}_market_chart.png

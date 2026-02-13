@@ -150,9 +150,15 @@ def detect_cycle_phases(df):
 
     return bullish_phase, bearish_phase
 
-def get_market_analysis_data(ticker="SPY", period="6mo"):
+def get_market_analysis_data(ticker="SPY", period="6mo", bloodbath_df=None):
     """
     Fetches data for the given ticker, calculates indicators, and returns a list of dictionaries.
+
+    Args:
+        ticker (str): Ticker symbol.
+        period (str): Data period to fetch.
+        bloodbath_df (pd.DataFrame, optional): Pre-calculated bloodbath data. If None, it will be calculated.
+
     Returns: (list_of_dicts, dataframe)
     """
     try:
@@ -207,7 +213,10 @@ def get_market_analysis_data(ticker="SPY", period="6mo"):
 
         # --- Integrate Market Bloodbath Data ---
         try:
-            bloodbath_df = calculate_market_bloodbath_data()
+            if bloodbath_df is None:
+                # Fallback: Calculate if not provided (inefficient for loops, but safe for single calls)
+                bloodbath_df = calculate_market_bloodbath_data()
+
             if not bloodbath_df.empty:
                 # Merge with SPY df based on Date Index
                 # Left join to keep SPY dates
