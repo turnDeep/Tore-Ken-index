@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Constants
 PROJECT_ROOT = os.getcwd()
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
-STOCK_CSV_PATH = os.path.join(PROJECT_ROOT, 'stock.csv') # Save to root for rdt_data_fetcher
+STOCK_CSV_PATH = os.path.join(os.path.dirname(__file__), 'stock.csv')
 LATEST_JSON_PATH = os.path.join(DATA_DIR, 'latest.json')
 
 def run_calculation_scripts():
@@ -43,7 +43,8 @@ def generate_charts(stock_list=None, data_date=None):
 
     # Read long_term_ticker.csv
     try:
-        ticker_df = pd.read_csv("long_term_ticker.csv")
+        csv_path = os.path.join(os.path.dirname(__file__), 'long_term_ticker.csv')
+        ticker_df = pd.read_csv(csv_path)
         long_term_tickers = ticker_df['Ticker'].unique().tolist()
     except Exception as e:
         logger.error(f"Error reading long_term_ticker.csv: {e}")

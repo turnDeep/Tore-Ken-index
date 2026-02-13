@@ -184,12 +184,12 @@ def get_ticker_config(current_user: str = Depends(get_current_user)):
         short_term = ["SPY"]
         long_term = ["QQQ"]
 
-        st_path = os.path.join(PROJECT_ROOT, "short_term_ticker.csv")
+        st_path = os.path.join(os.path.dirname(__file__), "short_term_ticker.csv")
         if os.path.exists(st_path):
             df = pd.read_csv(st_path)
             short_term = df['Ticker'].unique().tolist()
 
-        lt_path = os.path.join(PROJECT_ROOT, "long_term_ticker.csv")
+        lt_path = os.path.join(os.path.dirname(__file__), "long_term_ticker.csv")
         if os.path.exists(lt_path):
             df = pd.read_csv(lt_path)
             long_term = df['Ticker'].unique().tolist()

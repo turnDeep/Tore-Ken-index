@@ -22,7 +22,8 @@ def run_short_term_process():
     logger.info("Starting Short Term Process...")
 
     try:
-        st_df = pd.read_csv("short_term_ticker.csv")
+        csv_path = os.path.join(os.path.dirname(__file__), 'short_term_ticker.csv')
+        st_df = pd.read_csv(csv_path)
         short_term_tickers = st_df['Ticker'].unique().tolist()
     except Exception as e:
         logger.error(f"Error reading short_term_ticker.csv: {e}")
