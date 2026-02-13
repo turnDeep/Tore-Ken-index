@@ -1,89 +1,100 @@
-# Tore-ken (トレけん) Market Dashboard - MomentumX Edition
+# Tore-ken (トレけん) Market Dashboard - Configurable Edition
 
 ## 1. 概要 (Overview)
 
-**Tore-ken (トレけん)** は、市場トレンドを把握し、MomentumXロジックに基づいて有望な銘柄を発掘するためのダッシュボードです。
-
-従来のRDTシステムから刷新され、**MomentumX** のスクリーニングロジックを完全移植しました。ATRトレーリングストップ、RSパーセンタイル、ボラティリティ調整済みRS、Zone RSといった高度な指標を組み合わせ、強力なトレンド銘柄（Strong Stocks）を抽出します。
+**Tore-ken (トレけん)** は、指定した銘柄の市場トレンド（短期・長期）を効率的にモニタリングするためのダッシュボードです。
+CSVファイルによる設定駆動型アーキテクチャを採用しており、分析対象の銘柄を柔軟に追加・変更することが可能です。
 
 ## 2. 主要機能
 
-### 2.1 Strong Stocks (有望銘柄リスト)
-市場全体の銘柄から、以下の厳格な基準を満たす銘柄を「Strong Stocks」として抽出します。ダッシュボードには、その中からさらに **ADR% (20日平均変動率) が 4.0% 以上** の「動きのある銘柄」のみが表示されます。
+### 2.1 Market Analysis (短期トレンド分析)
+`short_term_ticker.csv` に設定された銘柄（デフォルト: SPY, QQQ, SOXX, GLD）の日足チャートを表示します。
+*   **更新頻度:** 毎日 (火〜土 06:15 JST)
+*   **チャート機能:**
+    *   ローソク足チャート (6ヶ月分)
+    *   TSV (Time Segmented Volume) 近似値
+    *   StochRSI & 1OPサイクル判定
+    *   Market Bloodbath (暴落シグナル)
+    *   トレンド背景色 (緑=上昇, 赤=下落)
 
-*   **スクリーニング基準 (Entry Criteria)**:
-    1.  **ATR Trailing Stop**: Buy状態（強気トレンド）。
-    2.  **RS Percentile (1M)**: 80以上（市場の上位20%の強さ）。
-    3.  **RS Volatility Adjusted**: HMAの傾きが正（上昇モメンタム）。
-    4.  **Zone RS**: Power Zone（Zone 3: RS比率 > 1 かつ モメンタム > 0）。
+### 2.2 Strong Stocks Analysis (長期トレンド分析)
+`long_term_ticker.csv` に設定された銘柄（デフォルト: QQQ, SOXX, GLD）の週足チャートを表示します。
+*   **更新頻度:** 週1回 (土 06:15 JST)
+*   **チャート機能 (Light Mode):**
+    *   ローソク足チャート (週足) + ATR Trailing Stop
+    *   Zone RS (RRGロジックに基づく相対強度)
+    *   RS Percentile (過去のパフォーマンスに対する相対順位)
+    *   ※ データ取得期間は過去5年分を基準としています。
 
-*   **リスト維持・除外基準 (Persistence/Exit Criteria)**:
-    一度リスト入りした銘柄は、以下に該当するまで追跡され続けます。
-    1.  **ATR Trailing Stop**: Sell状態（弱気トレンド）に転換。
-    2.  **Zone RS**: Power Zone から脱落（Dead, Drift, Liftへ移動）。
+## 3. 設定 (Configuration)
 
-*   **運用スケジュール (Weekend Screening)**:
-    *   **週末 (金曜データ更新時)**: 新規採用・除外の判定を行います。週足確定ベースでリストを更新します。
-    *   **平日 (月〜木)**: リストの銘柄は固定したまま、株価やADR%などの指標のみを毎日更新します。
+以下のCSVファイルを編集することで、表示する銘柄を変更できます。
 
-*   **表示順序**:
-    *   エントリー日（リスト入りした日）が新しい順に表示されます。
+*   **`short_term_ticker.csv`**: 短期チャート用銘柄リスト
+    ```csv
+    Ticker
+    SPY
+    QQQ
+    SOXX
+    GLD
+    ```
 
-### 2.2 Market Analysis (市場分析)
-S&P 500 (SPY) の日足チャートと独自のトレンド判定を表示します。
-*   **Green Zone**: 上昇トレンド（積極投資推奨）。
-*   **Red Zone**: 下落トレンド（守備的）。
-*   **Neutral**: 中立。
+*   **`long_term_ticker.csv`**: 長期チャート用銘柄リスト
+    ```csv
+    Ticker
+    QQQ
+    SOXX
+    GLD
+    ```
 
-### 2.3 詳細チャート分析
-リスト内の銘柄を選択すると、詳細なテクニカルチャートが表示されます。
-*   **メインチャート**: ローソク足 + ATR Trailing Stop (緑=Buy, 赤=Sell)。
-*   **サブ指標**: Zone RS, RS Percentile, Volatility Adjusted RS, RTI (Range Tightening Indicator)。
+## 4. 自動実行スケジュール
 
-### 2.4 リアルタイム監視
-*   **Realtime RVol**: 市場開場中、WebSocketを通じてリアルタイムの相対出来高（RVol）を表示します。
-    *   **最適化**: APIリソース節約のため、**RTIシグナル（オレンジドット: 嵐の前の静けさ）** が点灯している「ブレイクアウト直前の銘柄」のみをリアルタイム更新します。それ以外の銘柄は `--` と表示されます。
+バックエンドのスケジューラー (`backend/ws_manager.py`) により、米国市場終了後のデータ確定タイミングに合わせて自動更新されます。
 
-## 3. 技術スタック
+*   **実行時間:**
+    *   **冬時間:** 日本時間 06:15
+    *   **夏時間:** 日本時間 05:15
+*   **実行内容:**
+    *   **火〜金曜日:** 短期チャートの更新のみ
+    *   **土曜日 (金曜引け後):** 短期チャートと長期チャートの両方を更新
+
+## 5. 技術スタック
 
 - **Backend**: Python 3.12, FastAPI
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript (PWA対応)
-- **Data Processing**: pandas, numpy, yfinance, mplfinance, numba
-- **Database**: JSON storage (日次データ保存)
+- **Data Processing**: pandas, numpy, yfinance, mplfinance
+- **Architecture**:
+    - `short_term_process.py`: 短期分析ロジック
+    - `long_term_process.py`: 長期分析ロジック
+    - `data_fetcher.py`: 処理のオーケストレーション
 
-## 4. ディレクトリ構造
+## 6. ディレクトリ構造
 
 ```
 .
 ├── backend/
 │   ├── main.py                     # FastAPIアプリケーションサーバー
-│   ├── data_fetcher.py             # 全体オーケストレーション
-│   ├── screener_service.py         # 新スクリーニング実行サービス (MomentumX)
-│   ├── rdt_data_fetcher.py         # データ取得・増分更新ロジック
-│   ├── chart_generator_mx.py       # MomentumX仕様のチャート生成
-│   ├── market_analysis_logic.py    # 市場分析ロジック (SPY)
-│   ├── market_chart_generator.py   # 市場分析チャート生成
-│   ├── calculate_atr_trailing_stop.py      # ATR計算モジュール
-│   ├── calculate_rs_percentile_histogram.py # RS Percentile計算モジュール
-│   ├── calculate_rs_volatility_adjusted.py # Volatility Adj RS計算モジュール
-│   ├── calculate_rti.py            # RTI計算モジュール
-│   ├── calculate_zone_rs.py        # Zone RS計算モジュール
-│   └── stock.csv                   # 監視対象銘柄リスト
+│   ├── data_fetcher.py             # 統合実行スクリプト
+│   ├── short_term_process.py       # 短期チャート生成プロセス
+│   ├── long_term_process.py        # 長期チャート生成プロセス
+│   ├── rdt_data_fetcher.py         # 長期データ取得ロジック
+│   ├── chart_generator_mx.py       # チャート描画エンジン
+│   ├── ws_manager.py               # スケジューラー管理
+│   ├── stock.csv                   # (内部利用)
+│   └── ...
 ├── frontend/
 │   ├── index.html                  # ダッシュボードUI
 │   ├── app.js                      # フロントエンドロジック
 │   └── style.css                   # スタイルシート
-├── data/                           # 生成されたデータ・チャート (Git対象外)
+├── short_term_ticker.csv           # 短期チャート設定
+├── long_term_ticker.csv            # 長期チャート設定
+├── data/                           # 生成データ (Git対象外)
 └── README.md
 ```
 
-## 5. セットアップ手順
+## 7. セットアップ手順
 
-### 5.1 前提条件
-- Python 3.12+
-- `pip`
-
-### 5.2 インストール
+### 7.1 インストール
 
 ```bash
 # 1. リポジトリをクローン
@@ -94,23 +105,15 @@ cd tore-ken
 pip install -r backend/requirements.txt
 ```
 
-### 5.3 データの初期化と実行
+### 7.2 実行
 
 ```bash
-# 1. データの取得とスクリーニングの実行
-# 初回は過去5年分のデータを取得するため時間がかかります
-python -m backend.data_fetcher fetch
-
-# 2. サーバーの起動
+# サーバーの起動 (スケジューラーも同時に起動します)
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ブラウザで `http://localhost:8000` にアクセスしてください。
 
-## 6. 運用
-
-データは日次で更新することを推奨します。`backend/data_fetcher.py` をcronなどで定期実行することで、最新の市場データに基づいたスクリーニングが行われ、通知が送信されます。
-
-## 7. ライセンス
+## 8. ライセンス
 
 本ソフトウェアは個人利用を目的としています。
