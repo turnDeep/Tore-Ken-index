@@ -44,7 +44,7 @@ def calculate_market_bloodbath_data():
         # Fetch data for all tickers at once
         # We need 'Low' to determine New Lows
         # We fetch without group_by='ticker' to get (Price, Ticker) structure which is standard for 'Low' access
-        data = yf.download(tickers, period=HISTORY_PERIOD, interval="1d", progress=False, threads=True)
+        data = yf.download(tickers, period=HISTORY_PERIOD, interval="1d", progress=False, threads=False)
 
         if data.empty:
             logger.error("No data fetched.")

@@ -84,8 +84,8 @@ def get_unique_symbols(symbol_limit=None, override_start_date=None):
         symbol_limit: シンボル数の制限
         override_start_date: 開始日の上書き（グローバル設定より優先）
     """
-    # Check for long_term_ticker.csv in the current directory (Replaces stock.csv)
-    stock_csv_path = "long_term_ticker.csv"
+    # Check for long_term_ticker.csv in the backend directory (Replaces stock.csv)
+    stock_csv_path = os.path.join(os.path.dirname(__file__), 'long_term_ticker.csv')
     if os.path.exists(stock_csv_path):
         try:
             logging.info(f"Reading symbols from: {stock_csv_path}")
