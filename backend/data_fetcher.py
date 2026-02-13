@@ -108,56 +108,61 @@ def send_push_notifications(daily_data):
 
     logger.info(f"Push notifications sent: {sent_count} | Standard: {standard_count}, Secret: {secret_count}, Ura: {ura_count}")
 
-def fetch_and_notify():
+def fetch_and_notify(run_short=True, run_long=True):
     """
     Orchestrates the chart generation processes and sends notifications.
     """
-    logger.info("Executing fetch_and_notify...")
+    logger.info(f"Executing fetch_and_notify (Short: {run_short}, Long: {run_long})...")
 
     try:
+        primary_market_data = None
+        daily_data = None
+
         # 1. Short Term Process (Market Analysis)
-        primary_market_data = run_short_term_process()
+        if run_short:
+            primary_market_data = run_short_term_process()
 
         # 2. Long Term Process (Strong Stocks)
-        daily_data = run_long_term_process()
+        if run_long:
+            daily_data = run_long_term_process()
+        else:
+            # Create dummy daily_data for notification if long term didn't run
+            # Use current date or primary market data date
+            date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+            daily_data = {
+                "date": date_str,
+                "status_text": "Short Term Only",
+                "market_status": "Neutral"
+            }
 
         # Merge Market Status into daily_data if available (Using Primary Ticker)
         if daily_data and primary_market_data:
             latest_market = primary_market_data[-1]
             daily_data['market_status'] = latest_market['market_status']
             daily_data['status_text'] = latest_market['status_text'] # Overwrite "Screened: N" or append?
-            # User wants "Market Analysis is formerly displayed". The frontend uses 'status_text' for the badge.
-            # screener_service sets status_text to "Screened: N".
-            # We should probably combine them or prioritize Market Status.
-            # Frontend app.js uses status_text for badge color (Green/Red).
-            # So we should use the Market Status text.
 
-            # Update the JSON files saved by screener_service?
-            # screener_service saves json inside run_screener_process.
-            # We might need to update those files or modify run_screener_process to accept status.
-            # For now, let's update daily_data here and re-save if we want consistency,
-            # BUT screener_service already wrote to disk.
+            # If long term process ran, it saved JSONs. We should update them.
+            if run_long:
+                # Re-writing the daily JSONs to include Market Status
+                # Use date from daily_data to find the correct file
+                today_str = daily_data.get('date', '').replace('-', '')
+                if not today_str:
+                    today_str = datetime.datetime.now().strftime('%Y%m%d')
 
-            # Re-writing the daily JSONs to include Market Status
-            # Use date from daily_data to find the correct file
-            today_str = daily_data.get('date', '').replace('-', '')
-            if not today_str:
-                today_str = datetime.datetime.now().strftime('%Y%m%d')
+                json_path = os.path.join(DATA_DIR, f"{today_str}.json")
+                latest_path = os.path.join(DATA_DIR, "latest.json")
 
-            json_path = os.path.join(DATA_DIR, f"{today_str}.json")
-            latest_path = os.path.join(DATA_DIR, "latest.json")
+                if os.path.exists(json_path):
+                    with open(json_path, 'r') as f:
+                        saved_data = json.load(f)
+                    saved_data['market_status'] = latest_market['market_status']
+                    saved_data['status_text'] = latest_market['status_text']
+                    with open(json_path, 'w') as f:
+                        json.dump(saved_data, f)
 
-            if os.path.exists(json_path):
-                with open(json_path, 'r') as f:
-                    saved_data = json.load(f)
-                saved_data['market_status'] = latest_market['market_status']
-                saved_data['status_text'] = latest_market['status_text']
-                with open(json_path, 'w') as f:
-                    json.dump(saved_data, f)
-
-            if os.path.exists(latest_path):
-                with open(latest_path, 'w') as f:
-                    json.dump(saved_data, f) # Save updated data
+                if os.path.exists(latest_path):
+                    with open(latest_path, 'w') as f:
+                        json.dump(saved_data, f) # Save updated data
 
             # Update local var for notification
             daily_data['market_status'] = latest_market['market_status']

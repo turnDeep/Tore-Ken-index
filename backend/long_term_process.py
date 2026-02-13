@@ -6,6 +6,7 @@ import numpy as np
 import datetime
 import subprocess
 import sys
+import pytz
 from backend.get_tickers import update_stock_csv_from_fmp
 from backend.rdt_data_fetcher import get_unique_symbols, download_price_data, merge_price_data, save_price_data, load_existing_price_data
 from backend.chart_generator_mx import RDTChartGenerator
@@ -100,17 +101,57 @@ def run_long_term_process(force_weekend_mode=False):
     end_date = datetime.datetime.now().strftime('%Y-%m-%d')
     data_date = None
 
+    # Determine End Date for Data Fetching (Weekly Analysis)
+    # Logic:
+    # If run on Friday (after close) or Saturday/Sunday: Target is "This Friday" (most recent completed week).
+    # If run on Mon-Thu: Target is "Last Friday".
+    # yfinance end_date is exclusive, so we add 1 day to the target Friday.
+
+    tz = pytz.timezone('US/Eastern')
+    now_et = datetime.datetime.now(tz)
+
+    # 0=Mon, 4=Fri, 6=Sun
+    weekday = now_et.weekday()
+    hour = now_et.hour
+    minute = now_et.minute
+
+    # Is market closed for the week? (Fri > 16:15 or Sat or Sun)
+    is_market_closed_fri = (weekday == 4 and (hour > 16 or (hour == 16 and minute >= 15)))
+    is_weekend = (weekday > 4)
+
+    target_friday = None
+    if is_market_closed_fri or is_weekend:
+        # Target: This week's Friday
+        days_to_subtract = 0
+        if weekday == 5: days_to_subtract = 1 # Sat -> Fri
+        elif weekday == 6: days_to_subtract = 2 # Sun -> Fri
+        target_friday = now_et.date() - datetime.timedelta(days=days_to_subtract)
+    else:
+        # Target: Last week's Friday
+        days_since_fri = (weekday - 4) % 7
+        if days_since_fri == 0: days_since_fri = 7 # Force 1 week back if it is Friday (but market open)
+        target_friday = now_et.date() - datetime.timedelta(days=days_since_fri)
+
+    # YFinance End Date (Exclusive) -> Target Friday + 1 Day (Saturday)
+    # This ensures we get the full Friday candle.
+    calc_end_date_obj = target_friday + datetime.timedelta(days=1)
+    calc_end_date_str = calc_end_date_obj.strftime('%Y-%m-%d')
+
+    logger.info(f"Long Term Process: Target Friday is {target_friday}, End Date set to {calc_end_date_str}")
+
     if existing_data is not None and last_date is not None:
          start_date_dl = (last_date + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-         if last_date.date() < datetime.datetime.now().date():
-             new_data = download_price_data(symbols, start_date_dl, end_date)
+         # Check if we need to update
+         # If last_date (latest in DB) is before target_friday, we fetch.
+         if last_date.date() < target_friday:
+             new_data = download_price_data(symbols, start_date_dl, calc_end_date_str)
              final_data = merge_price_data(existing_data, new_data) if new_data is not None else existing_data
              save_price_data(final_data)
          else:
              logger.info("Data up to date.")
              final_data = existing_data
     else:
-        final_data = download_price_data(symbols, start_date, end_date)
+        final_data = download_price_data(symbols, start_date, calc_end_date_str)
         if final_data is not None:
             save_price_data(final_data)
 
