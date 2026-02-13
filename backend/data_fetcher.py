@@ -7,6 +7,7 @@ from pywebpush import webpush, WebPushException
 from backend.long_term_process import run_long_term_process
 from backend.short_term_process import run_short_term_process
 from backend.security_manager import security_manager
+from backend.get_tickers import update_stock_csv_from_fmp
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -115,6 +116,23 @@ def fetch_and_notify(run_short=True, run_long=True):
     logger.info(f"Executing fetch_and_notify (Short: {run_short}, Long: {run_long})...")
 
     try:
+        # Check and initialize stock.csv if needed (for Bloodbath calculation)
+        stock_csv_path = os.path.join(os.path.dirname(__file__), 'stock.csv')
+        should_update = False
+        if not os.path.exists(stock_csv_path):
+            should_update = True
+        else:
+            try:
+                with open(stock_csv_path, 'r') as f:
+                    if len(f.readlines()) < 100: # Arbitrary threshold for "valid universe"
+                        should_update = True
+            except:
+                should_update = True
+
+        if should_update:
+            logger.info("Initializing stock.csv for Market Bloodbath calculation...")
+            update_stock_csv_from_fmp(stock_csv_path)
+
         primary_market_data = None
         daily_data = None
 
