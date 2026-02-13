@@ -23,7 +23,8 @@ def get_tickers():
             return []
         df = pd.read_csv(STOCK_CSV)
         # Assuming header exists and column 0 is Ticker
-        return df.iloc[:, 0].tolist()
+        # Drop NaNs and ensure all tickers are strings
+        return df.iloc[:, 0].dropna().astype(str).tolist()
     except Exception as e:
         logger.error(f"Error reading {STOCK_CSV}: {e}")
         return []
