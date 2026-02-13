@@ -68,7 +68,22 @@ CSVファイルによる設定駆動型アーキテクチャを採用してお�
     - `long_term_process.py`: 長期分析ロジック
     - `data_fetcher.py`: 処理のオーケストレーション
 
-## 6. ディレクトリ構造
+## 6. 手動実行 (Manual Execution)
+
+必要に応じて手動でチャート更新を行うことができます。
+
+```bash
+# Dockerコンテナ内で実行する場合
+docker compose exec backend python -m backend.data_fetcher
+
+# 短期チャートのみ更新 (月〜木の任意実行など)
+docker compose exec backend python -m backend.data_fetcher --short-only
+
+# 長期チャートのみ更新 (金曜引け後の再実行など)
+docker compose exec backend python -m backend.data_fetcher --long-only
+```
+
+## 7. ディレクトリ構造
 
 ```
 .
@@ -92,9 +107,9 @@ CSVファイルによる設定駆動型アーキテクチャを採用してお�
 └── README.md
 ```
 
-## 7. セットアップ手順
+## 8. セットアップ手順
 
-### 7.1 インストール
+### 8.1 インストール
 
 ```bash
 # 1. リポジトリをクローン
@@ -105,7 +120,7 @@ cd tore-ken
 pip install -r backend/requirements.txt
 ```
 
-### 7.2 実行
+### 8.2 実行
 
 ```bash
 # サーバーの起動 (スケジューラーも同時に起動します)
@@ -114,6 +129,6 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 ブラウザで `http://localhost:8000` にアクセスしてください。
 
-## 8. ライセンス
+## 9. ライセンス
 
 本ソフトウェアは個人利用を目的としています。

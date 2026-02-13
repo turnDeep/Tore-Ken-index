@@ -179,4 +179,18 @@ def fetch_and_notify(run_short=True, run_long=True):
         traceback.print_exc()
 
 if __name__ == "__main__":
-    fetch_and_notify()
+    import argparse
+    parser = argparse.ArgumentParser(description='Run Data Fetcher and Chart Generation')
+    parser.add_argument('--short-only', action='store_true', help='Run only Short Term process')
+    parser.add_argument('--long-only', action='store_true', help='Run only Long Term process')
+    args = parser.parse_args()
+
+    run_short = True
+    run_long = True
+
+    if args.short_only:
+        run_long = False
+    elif args.long_only:
+        run_short = False
+
+    fetch_and_notify(run_short=run_short, run_long=run_long)
