@@ -4,11 +4,9 @@ import sys
 import datetime
 import logging
 from pywebpush import webpush, WebPushException
-from backend.screener_service import run_screener_process
+from backend.long_term_process import run_long_term_process
+from backend.short_term_process import run_short_term_process
 from backend.security_manager import security_manager
-# Market Analysis Imports
-from backend.market_analysis_logic import get_market_analysis_data
-from backend.market_chart_generator import generate_market_chart
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -112,40 +110,20 @@ def send_push_notifications(daily_data):
 
 def fetch_and_notify():
     """
-    Orchestrates the new screening process and sends notifications.
-    This replaces the old logic.
+    Orchestrates the chart generation processes and sends notifications.
     """
-    logger.info("Executing fetch_and_notify (New MomentumX Logic)...")
+    logger.info("Executing fetch_and_notify...")
 
     try:
-        # 1. Market Analysis (SPY)
-        logger.info("Generating Market Analysis Data (6 months)...")
-        # get_market_analysis_data returns (market_data_list, spy_df)
-        market_data, spy_df = get_market_analysis_data(period="6mo")
+        # 1. Short Term Process (Market Analysis)
+        primary_market_data = run_short_term_process()
 
-        if market_data:
-            # Generate Chart Image
-            chart_path = os.path.join(DATA_DIR, "market_chart.png")
-            logger.info(f"Generating chart image at {chart_path}...")
-            generate_market_chart(spy_df, chart_path)
+        # 2. Long Term Process (Strong Stocks)
+        daily_data = run_long_term_process()
 
-            # Save market analysis (History)
-            analysis_file = os.path.join(DATA_DIR, "market_analysis.json")
-            with open(analysis_file, "w") as f:
-                json.dump({
-                    "history": market_data,
-                    "last_updated": datetime.datetime.now().isoformat()
-                }, f)
-            logger.info(f"Saved {analysis_file}")
-        else:
-            logger.error("Failed to generate market data.")
-
-        # 2. MomentumX Screener
-        daily_data = run_screener_process()
-
-        # Merge Market Status into daily_data if available
-        if daily_data and market_data:
-            latest_market = market_data[-1]
+        # Merge Market Status into daily_data if available (Using Primary Ticker)
+        if daily_data and primary_market_data:
+            latest_market = primary_market_data[-1]
             daily_data['market_status'] = latest_market['market_status']
             daily_data['status_text'] = latest_market['status_text'] # Overwrite "Screened: N" or append?
             # User wants "Market Analysis is formerly displayed". The frontend uses 'status_text' for the badge.

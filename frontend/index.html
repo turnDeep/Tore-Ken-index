@@ -127,43 +127,7 @@
         </header>
 
         <main id="dashboard-content">
-            <!-- Market Analysis Section -->
-            <div class="market-section">
-                <h3>Market Analysis</h3>
-                <div class="market-analysis-container">
-                    <!-- Image container with relative positioning for overlay -->
-                    <div id="chart-wrapper" style="position: relative; width: 100%; overflow: hidden;">
-                        <img id="market-chart-img" src="/api/market-chart.png" alt="Market Analysis Chart" style="width: 100%; display: block;">
-                        <!-- Overlay line -->
-                        <div id="chart-cursor" style="position: absolute; top: 0; bottom: 0; width: 2px; background-color: black; border-left: 1px dashed black; opacity: 0.3; pointer-events: none; display: none;"></div>
-                    </div>
-
-                    <div class="controls-container">
-                        <button id="prev-btn" class="control-btn">&lt;</button>
-                        <div class="slider-container">
-                             <input type="range" id="date-slider" min="0" max="0" value="0">
-                        </div>
-                        <button id="next-btn" class="control-btn">&gt;</button>
-                    </div>
-
-                    <div style="text-align: center; margin-top: 10px;">
-                        <span id="selected-date" class="date-display">--</span>
-                        <span id="market-status-badge" class="status-text status-neutral">--</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Strong Stocks Section -->
-            <div class="market-section">
-                <div class="strong-stocks-header">
-                    <h3>Strong Stocks</h3>
-                </div>
-                <div class="card">
-                    <div id="strong-stocks-content" style="overflow-x: auto;">
-                        <p style="text-align: center; color: #757575;">Select a date to view Strong Stocks</p>
-                    </div>
-                </div>
-            </div>
+            <div id="dashboard-dynamic-content"></div>
         </main>
     </div>
     <script src="app.js"></script>

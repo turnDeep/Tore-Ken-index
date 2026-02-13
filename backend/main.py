@@ -175,6 +175,30 @@ async def get_current_user_for_notification(
 
 # --- API Endpoints ---
 
+import pandas as pd
+
+@app.get("/api/config/tickers")
+def get_ticker_config(current_user: str = Depends(get_current_user)):
+    """Returns the ticker configuration from CSVs."""
+    try:
+        short_term = ["SPY"]
+        long_term = ["QQQ"]
+
+        st_path = os.path.join(PROJECT_ROOT, "short_term_ticker.csv")
+        if os.path.exists(st_path):
+            df = pd.read_csv(st_path)
+            short_term = df['Ticker'].unique().tolist()
+
+        lt_path = os.path.join(PROJECT_ROOT, "long_term_ticker.csv")
+        if os.path.exists(lt_path):
+            df = pd.read_csv(lt_path)
+            long_term = df['Ticker'].unique().tolist()
+
+        return {"short_term": short_term, "long_term": long_term}
+    except Exception as e:
+        logger.error(f"Error reading config: {e}")
+        return {"short_term": ["SPY"], "long_term": ["QQQ"]}
+
 @app.post("/api/auth/verify")
 def verify_pin(pin_data: PinVerification, response: Response, request: Request):
     """
@@ -237,11 +261,17 @@ def health_check():
     return {"status": "healthy"}
 
 @app.get("/api/market-analysis")
-def get_market_analysis(current_user: str = Depends(get_current_user)):
-    """Returns the market analysis chart data."""
-    path = os.path.join(DATA_DIR, "market_analysis.json")
+def get_market_analysis(ticker: Optional[str] = None, current_user: str = Depends(get_current_user)):
+    """Returns the market analysis chart data. Optionally filters by ticker."""
+    filename = f"{ticker}_market_analysis.json" if ticker else "market_analysis.json"
+    path = os.path.join(DATA_DIR, filename)
+
     if not os.path.exists(path):
+         # If specific ticker not found, try fallback or 404
+         if ticker:
+             raise HTTPException(status_code=404, detail=f"Analysis data for {ticker} not found.")
          raise HTTPException(status_code=404, detail="Market analysis data not found.")
+
     with open(path, "r", encoding='utf-8') as f:
         return json.load(f)
 
@@ -383,11 +413,6 @@ def debug_subscriptions(current_user: str = Depends(get_current_user)):
             for sub_id, data in subs.items()
         }
     }
-
-@app.get("/api/realtime-rvol")
-def get_realtime_rvol(current_user: str = Depends(get_current_user)):
-    """Returns current RVol data."""
-    return ws_manager.get_all_rvols()
 
 # Mount the frontend directory to serve static files
 # This must come AFTER all API routes

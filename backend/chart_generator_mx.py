@@ -23,8 +23,8 @@ class RDTChartGenerator:
         # Load Weekly Indicators
         zone_rs_data = self.load_pickle_data("zone_rs_weekly.pkl")
         rs_perc_data = self.load_pickle_data("rs_percentile_histogram_weekly.pkl")
-        rs_vol_data = self.load_pickle_data("rs_volatility_adjusted_weekly.pkl")
-        rti_data = self.load_pickle_data("rti_weekly.pkl")
+
+        # Vol Adj RS and RTI are removed (Light Mode is now default)
         atr_ts_data = self.load_pickle_data("atr_trailing_stop_weekly.pkl")
 
         # Load Raw Price (Daily) and Resample to Weekly for Main Chart
@@ -214,127 +214,6 @@ class RDTChartGenerator:
             except KeyError:
                 pass
 
-        # 4. Volatility Adjusted RS (Panel 4)
-        if rs_vol_data:
-            try:
-                rs_val = rs_vol_data["RS_Values"][ticker].reindex(valid_idx)
-                rs_ma = rs_vol_data["RS_MA"][ticker].reindex(valid_idx)
-
-                rs_pos = rs_val.apply(lambda x: x if x >= 0 else np.nan)
-                rs_neg = rs_val.apply(lambda x: x if x <= 0 else np.nan)
-
-                add_plot_safe(rs_pos, panel=4, color='blue', width=1.5, ylabel='Vol Adj RS')
-                add_plot_safe(rs_neg, panel=4, color='fuchsia', width=1.5)
-
-                if not rs_ma.isna().all():
-                    ma_diff = rs_ma.diff()
-                    ma_rising = rs_ma.copy()
-                    ma_falling = rs_ma.copy()
-                    ma_rising_mask = ma_diff >= 0
-                    ma_falling_mask = ma_diff < 0
-                    ma_rising[~ma_rising_mask] = np.nan
-                    ma_falling[~ma_falling_mask] = np.nan
-
-                    add_plot_safe(ma_rising, panel=4, color='blue', width=1.5)
-                    add_plot_safe(ma_falling, panel=4, color='fuchsia', width=1.5)
-
-                v_rs = rs_val.values
-                v_ma = rs_ma.values
-                v_zero = np.zeros_like(v_rs)
-                mask_valid_rs = ~np.isnan(v_rs)
-                mask_valid_ma = ~np.isnan(v_ma)
-
-                where_rs_pos = np.zeros_like(v_rs, dtype=bool)
-                where_rs_pos[mask_valid_rs] = v_rs[mask_valid_rs] > 0
-                where_rs_neg = np.zeros_like(v_rs, dtype=bool)
-                where_rs_neg[mask_valid_rs] = v_rs[mask_valid_rs] <= 0
-
-                # Note: fill_between logic uses the whole series (rs_val) which is not empty if we are here
-                # But the fill might be empty if condition is never met.
-                # make_addplot with fill_between usually safe if series is valid.
-                add_plot_safe(
-                    rs_val, panel=4, color='blue', alpha=0,
-                    fill_between=dict(y1=v_rs, y2=v_zero, where=where_rs_pos, color='#0084ff', alpha=0.2),
-                    secondary_y=False
-                )
-                add_plot_safe(
-                    rs_val, panel=4, color='pink', alpha=0,
-                    fill_between=dict(y1=v_rs, y2=v_zero, where=where_rs_neg, color='#ff52c8', alpha=0.2),
-                    secondary_y=False
-                )
-
-                mask_both = mask_valid_rs & mask_valid_ma
-                where_rs_gt_ma = np.zeros_like(v_rs, dtype=bool)
-                where_rs_gt_ma[mask_both] = v_rs[mask_both] > v_ma[mask_both]
-                where_rs_lt_ma = np.zeros_like(v_rs, dtype=bool)
-                where_rs_lt_ma[mask_both] = v_rs[mask_both] <= v_ma[mask_both]
-
-                add_plot_safe(
-                    rs_val, panel=4, color='blue', alpha=0,
-                    fill_between=dict(y1=v_rs, y2=v_ma, where=where_rs_gt_ma, color='#0084ff', alpha=0.2),
-                    secondary_y=False
-                )
-                add_plot_safe(
-                    rs_val, panel=4, color='pink', alpha=0,
-                    fill_between=dict(y1=v_rs, y2=v_ma, where=where_rs_lt_ma, color='#ff52c8', alpha=0.2),
-                    secondary_y=False
-                )
-
-            except KeyError:
-                pass
-
-        # 5. RTI (Panel 5)
-        if rti_data:
-            try:
-                rti_val = rti_data["RTI_Values"][ticker].reindex(valid_idx)
-                rti_sig = rti_data["RTI_Signals"][ticker].reindex(valid_idx)
-
-                # --- Zones & Background ---
-                # Zone 1 (0-5): Red, alpha=0.1
-                add_plot_safe(rti_val, panel=5, color='red', alpha=0, secondary_y=False,
-                    fill_between=dict(y1=5, y2=0, color='red', alpha=0.1))
-
-                # Zone 2 (5-20): Green, alpha=0.15 (PineScript 80 transparent -> 0.2 alpha approx)
-                add_plot_safe(rti_val, panel=5, color='green', alpha=0, secondary_y=False,
-                    fill_between=dict(y1=20, y2=5, color='green', alpha=0.15))
-
-                # --- Reference Lines (Gray) ---
-                # 0, 5, 20, 100
-                ref_lines = [0, 5, 20, 100]
-                for line_val in ref_lines:
-                    line_series = pd.Series(line_val, index=valid_idx)
-                    add_plot_safe(line_series, panel=5, color='gray', width=0.8)
-
-                # --- RTI Line (Blue Base) ---
-                add_plot_safe(rti_val, panel=5, color='blue', ylabel='RTI', width=1.5)
-
-                # --- RTI Line (Green Segments for Expansion) ---
-                # Logic: If Expansion (Signal 3) at T, segment T-1 -> T is Green.
-                # If consecutive expansions, segments connect.
-                # We need points where (Sig[i] == 3) OR (Sig[i+1] == 3).
-                # Note: valid_idx ensures alignment.
-                mask_exp = (rti_sig == 3)
-                # Create boolean mask for points to include in green line
-                # Use shift(-1) to look ahead (if next is exp, current is start of segment)
-                mask_green = mask_exp | mask_exp.shift(-1).fillna(False)
-
-                rti_green = rti_val.copy()
-                rti_green[~mask_green] = np.nan
-
-                if not rti_green.isna().all():
-                    add_plot_safe(rti_green, panel=5, color='green', width=2.0)
-
-                # --- Orange Dot (Signal 2: Consecutive < 20) ---
-                mask_dot = (rti_sig == 2)
-                dots = rti_val.copy()
-                dots[:] = np.nan
-                dots[mask_dot] = rti_val[mask_dot]
-
-                if not dots.isna().all():
-                    add_plot_safe(dots, panel=5, type='scatter', markersize=25, color='orange', marker='o')
-
-            except KeyError:
-                pass
 
         # 6. Plotting
         if output_filename is None:
@@ -354,6 +233,10 @@ class RDTChartGenerator:
         }
         s = mpf.make_mpf_style(base_mpf_style='yahoo', rc=rc_params)
 
+        # Adjust panel ratios (Light Mode Default: Price, Vol, Zone, Hist)
+        panel_ratios = (4, 1, 1, 1)
+        figsize = (12, 10)
+
         fig, axes = mpf.plot(
             plot_df,
             type='candle',
@@ -361,9 +244,9 @@ class RDTChartGenerator:
             addplot=apds,
             volume=True,
             volume_panel=1,
-            panel_ratios=(4, 1, 1, 1, 1, 1),
+            panel_ratios=panel_ratios,
             returnfig=True,
-            figsize=(12, 16),
+            figsize=figsize,
             tight_layout=True,
             title=f"{ticker} Weekly Analysis",
             datetime_format='%Y-%-m-%-d',

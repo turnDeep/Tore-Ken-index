@@ -434,303 +434,179 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Dashboard Functions (Refactored) ---
 
+    // State management for multiple charts
+    const dashboardState = {
+        charts: {} // { ticker: { history: [], currentIndex: 0 } }
+    };
+
     async function fetchDataAndRender() {
         try {
-            const response = await fetchWithAuth('/api/market-analysis');
-            if (!response.ok) throw new Error("Failed to load market analysis");
+            // 1. Fetch Config
+            const configRes = await fetchWithAuth('/api/config/tickers');
+            if (!configRes.ok) throw new Error("Failed to load config");
+            const config = await configRes.json();
 
-            const data = await response.json();
+            const dynamicContainer = document.getElementById('dashboard-dynamic-content');
+            dynamicContainer.innerHTML = ''; // Clear
+
+            // 2. Render Short Term Charts
+            for (const ticker of config.short_term) {
+                await renderMarketAnalysisSection(ticker, dynamicContainer);
+            }
+
+            // 3. Render Long Term Charts
+            for (const ticker of config.long_term) {
+                renderLongTermSection(ticker, dynamicContainer);
+            }
+
+        } catch (error) {
+            console.error("Failed to initialize dashboard:", error);
+        }
+    }
+
+    async function renderMarketAnalysisSection(ticker, container) {
+        // Create HTML Structure
+        const section = document.createElement('div');
+        section.className = 'market-section';
+        section.innerHTML = `
+            <h3>Market Analysis (${ticker})</h3>
+            <div class="market-analysis-container">
+                <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
+                    <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
+                    <div id="cursor-${ticker}" style="position: absolute; top: 0; bottom: 0; width: 2px; background-color: black; border-left: 1px dashed black; opacity: 0.3; pointer-events: none; display: none;"></div>
+                </div>
+
+                <div class="controls-container">
+                    <button id="prev-${ticker}" class="control-btn">&lt;</button>
+                    <div class="slider-container">
+                            <input type="range" id="slider-${ticker}" min="0" max="0" value="0" style="width: 100%;">
+                    </div>
+                    <button id="next-${ticker}" class="control-btn">&gt;</button>
+                </div>
+
+                <div style="text-align: center; margin-top: 10px;">
+                    <span id="date-${ticker}" class="date-display">--</span>
+                    <span id="status-${ticker}" class="status-text status-neutral">--</span>
+                </div>
+            </div>
+        `;
+        container.appendChild(section);
+
+        // Fetch Data
+        try {
+            const res = await fetchWithAuth(`/api/market-analysis?ticker=${ticker}`);
+            if (!res.ok) throw new Error(`Failed to load data for ${ticker}`);
+            const data = await res.json();
 
             if (data.history && data.history.length > 0) {
-                marketHistory = data.history;
-                currentDateIndex = marketHistory.length - 1; // Default to latest
+                // Initialize State
+                dashboardState.charts[ticker] = {
+                    history: data.history,
+                    currentIndex: data.history.length - 1
+                };
 
-                // No Plotly rendering needed, image is loaded via HTML
-                // Setup Controls
-                setupControls();
+                // Setup Logic
+                setupChartControls(ticker);
+                updateChartDailyView(ticker, dashboardState.charts[ticker].currentIndex);
 
-                // Load Initial Daily Data
-                updateDailyView(currentDateIndex);
-
-                // Update Last Updated
+                // Update global last updated (using first valid one)
                 const lastUpdatedEl = document.getElementById('last-updated');
                 if (lastUpdatedEl && data.last_updated) {
                     lastUpdatedEl.textContent = `Last updated: ${new Date(data.last_updated).toLocaleString('ja-JP')}`;
                 }
-            } else {
-                console.error("No history data found");
             }
-        } catch (error) {
-            console.error("Failed to fetch market analysis:", error);
+        } catch (e) {
+            console.error(e);
+            section.innerHTML += `<p style="color:red; text-align:center;">Failed to load data.</p>`;
         }
     }
 
-    function setupControls() {
-        const slider = document.getElementById('date-slider');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
+    function setupChartControls(ticker) {
+        const slider = document.getElementById(`slider-${ticker}`);
+        const prevBtn = document.getElementById(`prev-${ticker}`);
+        const nextBtn = document.getElementById(`next-${ticker}`);
+        const state = dashboardState.charts[ticker];
 
         slider.min = 0;
-        slider.max = marketHistory.length - 1;
-        slider.value = currentDateIndex;
+        slider.max = state.history.length - 1;
+        slider.value = state.currentIndex;
 
         slider.addEventListener('input', (e) => {
             const idx = parseInt(e.target.value);
-            updateDailyView(idx);
+            updateChartDailyView(ticker, idx);
         });
 
         prevBtn.addEventListener('click', () => {
-            if (currentDateIndex > 0) {
-                updateDailyView(currentDateIndex - 1);
-                slider.value = currentDateIndex;
+            if (state.currentIndex > 0) {
+                updateChartDailyView(ticker, state.currentIndex - 1);
+                slider.value = state.currentIndex;
             }
         });
 
         nextBtn.addEventListener('click', () => {
-            if (currentDateIndex < marketHistory.length - 1) {
-                updateDailyView(currentDateIndex + 1);
-                slider.value = currentDateIndex;
+            if (state.currentIndex < state.history.length - 1) {
+                updateChartDailyView(ticker, state.currentIndex + 1);
+                slider.value = state.currentIndex;
             }
         });
     }
 
-    async function updateDailyView(index) {
-        currentDateIndex = index;
-        const historyItem = marketHistory[index];
-        const dateKey = historyItem.date_key; // YYYYMMDD
+    function updateChartDailyView(ticker, index) {
+        const state = dashboardState.charts[ticker];
+        state.currentIndex = index;
+        const item = state.history[index];
 
-        // Update Date Display
-        document.getElementById('selected-date').textContent = historyItem.date;
+        // Update Date
+        document.getElementById(`date-${ticker}`).textContent = item.date;
 
-        // Update Status Badge
-        const badge = document.getElementById('market-status-badge');
-        badge.textContent = historyItem.status_text;
-        badge.className = 'status-text'; // Reset
-
-        if (historyItem.status_text.includes("Red to")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Green to")) badge.classList.add('status-red');
-        else if (historyItem.status_text.includes("Green")) badge.classList.add('status-green');
-        else if (historyItem.status_text.includes("Red")) badge.classList.add('status-red');
+        // Update Status
+        const badge = document.getElementById(`status-${ticker}`);
+        badge.textContent = item.status_text;
+        badge.className = 'status-text';
+        if (item.status_text.includes("Red to")) badge.classList.add('status-green');
+        else if (item.status_text.includes("Green to")) badge.classList.add('status-red');
+        else if (item.status_text.includes("Green")) badge.classList.add('status-green');
+        else if (item.status_text.includes("Red")) badge.classList.add('status-red');
         else badge.classList.add('status-neutral');
 
-        // Move Vertical Line on Image (CSS)
-        const chartWrapper = document.getElementById('chart-wrapper');
-        const cursor = document.getElementById('chart-cursor');
+        // Update Cursor
+        const cursor = document.getElementById(`cursor-${ticker}`);
+        const marginLeft = 0.05;
+        const marginRight = 0.12;
+        const plotWidthPct = 1.0 - marginLeft - marginRight;
+        const count = state.history.length;
+        const pct = (index + 0.5) / count;
+        const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
 
-        if (chartWrapper && cursor && marketHistory.length > 0) {
-            // Logic to calculate position
-            // The chart image generated by mplfinance has margins.
-            // With tight_layout and figsize(10,8), the plot area is roughly 80-90% of width.
-            // This is a rough approximation. Ideally we'd know the exact pixel bounds.
-            // Let's assume standard margins.
-
-            // Adjust these offsets based on the actual generated image appearance
-            const marginLeft = 0.05; // 5% from left
-            const marginRight = 0.12; // 12% from right
-            const plotWidthPct = 1.0 - marginLeft - marginRight;
-
-            // Calculate percentage position
-            // index 0 = left edge of plot area
-            // index max = right edge of plot area
-            const count = marketHistory.length;
-            const pct = (index + 0.5) / count;
-            const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
-
-            cursor.style.left = `${leftPos}%`;
-            cursor.style.display = 'block';
-        }
-
-        // Fetch Daily Data (Strong Stocks)
-        const contentDiv = document.getElementById('strong-stocks-content');
-        contentDiv.innerHTML = '<div class="loading-spinner-small"></div>';
-
-        try {
-            const response = await fetchWithAuth(`/api/daily/${dateKey}`);
-            if (response.ok) {
-                const data = await response.json();
-                renderStrongStocks(data.strong_stocks);
-            } else {
-                // Check if this date is 'today' or close enough?
-                // Or simply show no data
-                contentDiv.innerHTML = '<p style="text-align: center; color: #757575;">No Strong Stocks data available for this date.</p>';
-            }
-        } catch (error) {
-             contentDiv.innerHTML = '<p style="text-align: center; color: #757575;">Error loading data.</p>';
-        }
+        cursor.style.left = `${leftPos}%`;
+        cursor.style.display = 'block';
     }
 
-    function renderStrongStocks(stocks) {
-        const contentDiv = document.getElementById('strong-stocks-content');
+    function renderLongTermSection(ticker, container) {
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-top: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);';
 
-        // Filter by ADR% >= 4.0
-        const filteredStocks = stocks.filter(s => (s.adr_pct !== undefined && s.adr_pct >= 4.0));
+        const title = document.createElement('h4');
+        title.textContent = `${ticker} Analysis (Long Term)`;
+        section.appendChild(title);
 
-        // Sort by Entry Date (Newest first)
-        filteredStocks.sort((a, b) => {
-            const dateA = a.entry_date ? new Date(a.entry_date) : new Date(0);
-            const dateB = b.entry_date ? new Date(b.entry_date) : new Date(0);
-            return dateB - dateA; // Descending
-        });
+        const imgWrapper = document.createElement('div');
+        const img = document.createElement('img');
+        img.alt = `${ticker} Strong Stock Chart`;
+        img.style.cssText = 'width: 100%; display: block; border: 1px solid #eee;';
 
-        if (!filteredStocks || filteredStocks.length === 0) {
-            contentDiv.innerHTML = '<p style="text-align: center;">No Strong Stocks (ADR% >= 4) found.</p>';
-            return;
-        }
+        // Cache busting
+        const ts = new Date().getTime();
+        img.src = `/api/stock-chart/${ticker}_strong_stock.png?t=${ts}`;
 
-        // Clear content
-        contentDiv.innerHTML = '';
+        img.onerror = () => {
+            section.style.display = 'none';
+            console.log(`Missing long term chart for ${ticker}`);
+        };
 
-        // Matches Header
-        const header = document.createElement('div');
-        header.style.cssText = 'margin-bottom: 10px; font-size: 0.9em; text-align: right; color: #555;';
-        header.textContent = `Displaying: ${filteredStocks.length} / Total: ${stocks.length}`;
-        contentDiv.appendChild(header);
-
-        // Container
-        const listContainer = document.createElement('div');
-        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
-
-        filteredStocks.forEach(s => {
-            // Logic for border styling
-            const revAccel = s.revenue_accel === true;
-            const epsAccel = s.earnings_accel === true;
-            let borderStyle = '2px solid black';
-
-            if (revAccel && epsAccel) {
-                borderStyle = '3px solid blue';
-            } else if (revAccel || epsAccel) {
-                borderStyle = '2px solid blue';
-            }
-
-            const item = document.createElement('div');
-            item.style.cssText = `border: ${borderStyle}; padding: 10px; font-weight: bold; font-size: 0.7em; background: white;`;
-
-            // Line 1: Ticker, RVol, Price, ADR%
-            const line1 = document.createElement('div');
-
-            // Ticker
-            const tickerSpan = document.createElement('span');
-            tickerSpan.textContent = s.ticker;
-            tickerSpan.style.cssText = 'font-size: 1.6em; cursor: pointer; text-decoration: underline; color: #000; margin-right: 15px;';
-            line1.appendChild(tickerSpan);
-
-            // RealTime RVol (Magenta)
-            const rvolSpan = document.createElement('span');
-            rvolSpan.id = `rvol-${s.ticker}`;
-            rvolSpan.textContent = `RVol: --`; // Initial placeholder
-            rvolSpan.style.cssText = 'color: #FF00FF; font-size: 1.2em; margin-right: 15px;';
-            line1.appendChild(rvolSpan);
-
-            // Price
-            const priceSpan = document.createElement('span');
-            priceSpan.textContent = `Price: $${s.current_price}`;
-            priceSpan.style.cssText = 'font-size: 1.2em; color: #333; margin-right: 15px;';
-            line1.appendChild(priceSpan);
-
-            // ADR%
-            const adrSpan = document.createElement('span');
-            adrSpan.textContent = `ADR: ${s.adr_pct}%`;
-            adrSpan.style.cssText = 'font-size: 1.2em; color: #333;';
-            line1.appendChild(adrSpan);
-
-            item.appendChild(line1);
-
-            // Line 2: RTI & Entry Date
-            const line2 = document.createElement('div');
-            // Calculate Days Held
-            let entryInfo = "";
-            if (s.entry_date) {
-                const entry = new Date(s.entry_date);
-                const today = new Date();
-                const diffTime = Math.abs(today - entry);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                entryInfo = `Entry: ${s.entry_date} (${diffDays}d) | `;
-            }
-
-            line2.textContent = `${entryInfo}RTI: ${s.rti !== undefined ? s.rti : 'N/A'}`;
-            line2.style.fontSize = '1.2em';
-            line2.style.marginTop = '5px';
-            item.appendChild(line2);
-
-            // Line 3: Fundamentals
-            if (s.revenue_display || s.earnings_display) {
-                const line3 = document.createElement('div');
-                line3.style.cssText = 'font-size: 1.1em; margin-top: 5px; color: #333; display: flex; flex-direction: column;';
-
-                if (s.revenue_display) {
-                    const revSpan = document.createElement('span');
-                    revSpan.textContent = s.revenue_display;
-                    line3.appendChild(revSpan);
-                }
-                if (s.earnings_display) {
-                    const epsSpan = document.createElement('span');
-                    epsSpan.textContent = s.earnings_display;
-                    line3.appendChild(epsSpan);
-                }
-                item.appendChild(line3);
-            }
-
-            // Chart Container (Hidden by default)
-            const chartContainer = document.createElement('div');
-            chartContainer.style.display = 'none';
-            chartContainer.style.marginTop = '10px';
-            chartContainer.style.textAlign = 'center';
-
-            // Toggle Logic
-            tickerSpan.addEventListener('click', () => {
-                const isHidden = chartContainer.style.display === 'none';
-                chartContainer.style.display = isHidden ? 'block' : 'none';
-
-                if (isHidden && !chartContainer.hasChildNodes()) {
-                    // Load image
-                    if (s.chart_image) {
-                        const img = document.createElement('img');
-                        img.alt = `${s.ticker} Chart`;
-                        img.style.maxWidth = '100%';
-                        img.style.border = '1px solid #ccc';
-                        img.src = `/api/stock-chart/${s.chart_image}`;
-
-                        // Handle error
-                        img.onerror = () => {
-                            chartContainer.innerHTML = '<span style="color:red; font-size:0.8em;">Failed to load chart.</span>';
-                        };
-
-                        chartContainer.appendChild(img);
-                    } else {
-                        chartContainer.textContent = 'Chart not available.';
-                    }
-                }
-            });
-
-            item.appendChild(chartContainer);
-            listContainer.appendChild(item);
-        });
-
-        contentDiv.appendChild(listContainer);
-
-        // Start polling for RealTime RVol if not already started
-        if (!window.rvolInterval) {
-            fetchRealTimeRVol(); // Initial fetch
-            window.rvolInterval = setInterval(fetchRealTimeRVol, 60000); // Poll every 1 minute
-        }
-    }
-
-    async function fetchRealTimeRVol() {
-        try {
-            const response = await fetchWithAuth('/api/realtime-rvol');
-            if (response.ok) {
-                const data = await response.json();
-                Object.keys(data).forEach(ticker => {
-                    const el = document.getElementById(`rvol-${ticker}`);
-                    if (el) {
-                        const val = data[ticker];
-                        el.textContent = `RVol: ${val.toFixed(2)}x`;
-                    }
-                });
-            }
-        } catch (error) {
-            console.error("Failed to fetch RealTime RVol:", error);
-        }
+        imgWrapper.appendChild(img);
+        section.appendChild(imgWrapper);
+        container.appendChild(section);
     }
 
     // --- Auto Reload Function ---

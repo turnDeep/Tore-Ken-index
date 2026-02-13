@@ -84,21 +84,21 @@ def get_unique_symbols(symbol_limit=None, override_start_date=None):
         symbol_limit: シンボル数の制限
         override_start_date: 開始日の上書き（グローバル設定より優先）
     """
-    # Check for stock.csv in the current directory
-    stock_csv_path = "stock.csv"
+    # Check for long_term_ticker.csv in the current directory (Replaces stock.csv)
+    stock_csv_path = "long_term_ticker.csv"
     if os.path.exists(stock_csv_path):
         try:
             logging.info(f"Reading symbols from: {stock_csv_path}")
             df = pd.read_csv(stock_csv_path)
 
-            # stock.csv has 'Ticker', map to 'Symbol'
+            # Map 'Ticker' to 'Symbol'
             if 'Ticker' in df.columns and 'Symbol' not in df.columns:
                 df = df.rename(columns={'Ticker': 'Symbol'})
 
             if 'Symbol' in df.columns:
                 all_symbols = df['Symbol'].dropna().unique().tolist()
                 unique_symbols = sorted(list(set(all_symbols)))
-                logging.info(f"Found {len(unique_symbols)} unique symbols from stock.csv.")
+                logging.info(f"Found {len(unique_symbols)} unique symbols from {stock_csv_path}.")
 
                 # Determine start date logic
                 if override_start_date:
@@ -108,8 +108,8 @@ def get_unique_symbols(symbol_limit=None, override_start_date=None):
                     start_date = START_DATE
                     logging.info(f"Base start date: {start_date} (from config)")
                 else:
-                    start_date = (datetime.now() - timedelta(days=365*10)).strftime('%Y-%m-%d')
-                    logging.info(f"Base start date: {start_date} (10 years before today, default)")
+                    start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d')
+                    logging.info(f"Base start date: {start_date} (5 years before today, default)")
 
                 if symbol_limit is not None and symbol_limit > 0:
                     logging.info(f"Limiting to {symbol_limit} symbols for this run.")
