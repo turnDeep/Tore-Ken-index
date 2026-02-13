@@ -414,11 +414,6 @@ def debug_subscriptions(current_user: str = Depends(get_current_user)):
         }
     }
 
-@app.get("/api/realtime-rvol")
-def get_realtime_rvol(current_user: str = Depends(get_current_user)):
-    """Returns current RVol data."""
-    return ws_manager.get_all_rvols()
-
 # Mount the frontend directory to serve static files
 # This must come AFTER all API routes
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
