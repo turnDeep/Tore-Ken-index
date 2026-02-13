@@ -473,15 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="market-analysis-container">
                 <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
                     <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
-                    <div id="cursor-${ticker}" style="position: absolute; top: 0; bottom: 0; width: 2px; background-color: black; border-left: 1px dashed black; opacity: 0.3; pointer-events: none; display: none;"></div>
-                </div>
-
-                <div class="controls-container">
-                    <button id="prev-${ticker}" class="control-btn">&lt;</button>
-                    <div class="slider-container">
-                            <input type="range" id="slider-${ticker}" min="0" max="0" value="0" style="width: 100%;">
-                    </div>
-                    <button id="next-${ticker}" class="control-btn">&gt;</button>
                 </div>
 
                 <div style="text-align: center; margin-top: 10px;">
@@ -499,15 +490,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (data.history && data.history.length > 0) {
-                // Initialize State
-                dashboardState.charts[ticker] = {
-                    history: data.history,
-                    currentIndex: data.history.length - 1
-                };
-
-                // Setup Logic
-                setupChartControls(ticker);
-                updateChartDailyView(ticker, dashboardState.charts[ticker].currentIndex);
+                // Use the latest data point
+                const latestItem = data.history[data.history.length - 1];
+                updateChartInfo(ticker, latestItem);
 
                 // Update global last updated (using first valid one)
                 const lastUpdatedEl = document.getElementById('last-updated');
@@ -521,65 +506,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function setupChartControls(ticker) {
-        const slider = document.getElementById(`slider-${ticker}`);
-        const prevBtn = document.getElementById(`prev-${ticker}`);
-        const nextBtn = document.getElementById(`next-${ticker}`);
-        const state = dashboardState.charts[ticker];
-
-        slider.min = 0;
-        slider.max = state.history.length - 1;
-        slider.value = state.currentIndex;
-
-        slider.addEventListener('input', (e) => {
-            const idx = parseInt(e.target.value);
-            updateChartDailyView(ticker, idx);
-        });
-
-        prevBtn.addEventListener('click', () => {
-            if (state.currentIndex > 0) {
-                updateChartDailyView(ticker, state.currentIndex - 1);
-                slider.value = state.currentIndex;
-            }
-        });
-
-        nextBtn.addEventListener('click', () => {
-            if (state.currentIndex < state.history.length - 1) {
-                updateChartDailyView(ticker, state.currentIndex + 1);
-                slider.value = state.currentIndex;
-            }
-        });
-    }
-
-    function updateChartDailyView(ticker, index) {
-        const state = dashboardState.charts[ticker];
-        state.currentIndex = index;
-        const item = state.history[index];
-
+    function updateChartInfo(ticker, item) {
         // Update Date
-        document.getElementById(`date-${ticker}`).textContent = item.date;
+        const dateEl = document.getElementById(`date-${ticker}`);
+        if (dateEl) dateEl.textContent = item.date;
 
         // Update Status
         const badge = document.getElementById(`status-${ticker}`);
-        badge.textContent = item.status_text;
-        badge.className = 'status-text';
-        if (item.status_text.includes("Red to")) badge.classList.add('status-green');
-        else if (item.status_text.includes("Green to")) badge.classList.add('status-red');
-        else if (item.status_text.includes("Green")) badge.classList.add('status-green');
-        else if (item.status_text.includes("Red")) badge.classList.add('status-red');
-        else badge.classList.add('status-neutral');
-
-        // Update Cursor
-        const cursor = document.getElementById(`cursor-${ticker}`);
-        const marginLeft = 0.05;
-        const marginRight = 0.12;
-        const plotWidthPct = 1.0 - marginLeft - marginRight;
-        const count = state.history.length;
-        const pct = (index + 0.5) / count;
-        const leftPos = (marginLeft + (pct * plotWidthPct)) * 100;
-
-        cursor.style.left = `${leftPos}%`;
-        cursor.style.display = 'block';
+        if (badge) {
+            badge.textContent = item.status_text;
+            badge.className = 'status-text';
+            if (item.status_text.includes("Red to")) badge.classList.add('status-green');
+            else if (item.status_text.includes("Green to")) badge.classList.add('status-red');
+            else if (item.status_text.includes("Green")) badge.classList.add('status-green');
+            else if (item.status_text.includes("Red")) badge.classList.add('status-red');
+            else badge.classList.add('status-neutral');
+        }
     }
 
     function renderLongTermSection(ticker, container) {

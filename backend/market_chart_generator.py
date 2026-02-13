@@ -118,16 +118,9 @@ def generate_market_chart(df, output_path):
             title="",
             returnfig=True,
             figsize=(10, 14), # Increased height for extra panel
-            tight_layout=False,
+            tight_layout=True,
             fill_between=fill_between_list if fill_between_list else None
         )
-
-        # Enforce fixed margins for frontend slider alignment
-        fig.subplots_adjust(left=0.05, right=0.88, top=0.98, bottom=0.12)
-
-        # Enforce X-axis limits to match frontend logic
-        # -0.5 to len(df)-0.5 aligns perfectly with integer indices 0..N-1
-        axlist[0].set_xlim(-0.5, len(df) - 0.5)
 
         # --- Draw Divergence Lines ---
         # axlist structure:
@@ -193,7 +186,7 @@ def generate_market_chart(df, output_path):
                     ax_price.annotate('B', (curr_idx, y2), textcoords="offset points", xytext=(0,10),
                                       ha='center', color='red', fontsize=9, fontweight='bold')
 
-        fig.savefig(output_path, dpi=100)
+        fig.savefig(output_path, bbox_inches='tight', dpi=100)
         plt.close(fig)
         logger.info(f"Market chart generated at {output_path}")
         return True
