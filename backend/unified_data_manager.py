@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATA_DIR = os.path.join(os.getcwd(), 'data')
-UNIFIED_JSON_PATH = os.path.join(DATA_DIR, 'market_analysis_v2.json')
+UNIFIED_JSON_PATH = os.path.join(DATA_DIR, 'market_analysis.json')
 
 def load_unified_data() -> Dict[str, Any]:
     """Loads the unified market analysis data."""
