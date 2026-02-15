@@ -449,14 +449,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const dynamicContainer = document.getElementById('dashboard-dynamic-content');
             dynamicContainer.innerHTML = ''; // Clear
 
-            // 2. Render Short Term Charts
-            for (const ticker of config.short_term) {
-                await renderMarketAnalysisSection(ticker, dynamicContainer);
-            }
+            // 2. Render Charts grouped by Ticker
+            // Combine short_term and long_term lists, maintaining order and uniqueness
+            const allTickers = Array.from(new Set([...config.short_term, ...config.long_term]));
 
-            // 3. Render Long Term Charts
-            for (const ticker of config.long_term) {
-                renderLongTermSection(ticker, dynamicContainer);
+            for (const ticker of allTickers) {
+                // Render Short Term Chart if exists in config
+                if (config.short_term.includes(ticker)) {
+                    await renderMarketAnalysisSection(ticker, dynamicContainer);
+                }
+
+                // Render Long Term Chart if exists in config
+                if (config.long_term.includes(ticker)) {
+                    renderLongTermSection(ticker, dynamicContainer);
+                }
             }
 
         } catch (error) {
