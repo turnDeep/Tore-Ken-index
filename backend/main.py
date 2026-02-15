@@ -17,6 +17,7 @@ from typing import Dict, Any, Optional
 # Import security manager
 from .security_manager import security_manager
 from .ws_manager import ws_manager
+from .unified_data_manager import load_unified_data
 import asyncio
 
 # Setup logging
@@ -274,6 +275,15 @@ def get_market_analysis(ticker: Optional[str] = None, current_user: str = Depend
 
     with open(path, "r", encoding='utf-8') as f:
         return json.load(f)
+
+@app.get("/api/market-analysis-unified")
+def get_market_analysis_unified(current_user: str = Depends(get_current_user)):
+    """Returns the unified market analysis data for all tickers."""
+    data = load_unified_data()
+    if not data:
+        # Instead of 404, return empty object to prevent frontend crash on fresh install
+        return {}
+    return data
 
 @app.get("/api/market-chart.png")
 def get_market_chart(current_user: str = Depends(get_current_user_for_notification)):

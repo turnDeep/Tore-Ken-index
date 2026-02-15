@@ -10,6 +10,8 @@ import pytz
 from backend.get_tickers import update_stock_csv_from_fmp
 from backend.rdt_data_fetcher import get_unique_symbols, download_price_data, merge_price_data, save_price_data, load_existing_price_data
 from backend.chart_generator_mx import RDTChartGenerator
+from backend.unified_data_manager import load_unified_data, save_unified_data
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,8 +39,44 @@ def run_calculation_scripts():
             logger.error(f"Error running {script}: {e}")
             pass
 
-def generate_charts(stock_list=None, data_date=None):
-    """Generates charts based on long_term_ticker.csv."""
+def update_unified_long_term_data(long_term_tickers, is_update_time, data_date):
+    """Updates the unified JSON file with long-term data metadata."""
+    unified_data = load_unified_data()
+
+    current_time = datetime.datetime.now().isoformat()
+    formatted_date = data_date.strftime('%Y-%m-%d') if data_date else "Unknown"
+
+    for ticker in long_term_tickers:
+        if ticker not in unified_data:
+            unified_data[ticker] = {}
+
+        # Logic:
+        # If it is update time (Friday/Weekend), we update the long_term section.
+        # If NOT update time (Mon-Thu), we preserve existing long_term data.
+        # BUT, if long_term data is missing entirely, we should populate it regardless of day (first run).
+
+        has_existing_data = "long_term" in unified_data[ticker] and unified_data[ticker]["long_term"]
+
+        if is_update_time or not has_existing_data:
+            # Update data
+            unified_data[ticker]["long_term"] = {
+                "last_updated": current_time,
+                "data_date": formatted_date,
+                "status": "Updated" if is_update_time else "Initialized",
+                "image_url": f"/api/stock-chart/{ticker}_strong_stock.png"
+            }
+        else:
+            # Mon-Thu and data exists: Do NOT update the data content, effectively keeping last Friday's state.
+            # We might log that we skipped updating.
+            pass
+
+    save_unified_data(unified_data)
+
+def generate_charts(stock_list=None, data_date=None, is_update_time=True):
+    """
+    Generates charts based on long_term_ticker.csv.
+    Only generates new chart images if is_update_time is True.
+    """
     generator = RDTChartGenerator()
 
     # Read long_term_ticker.csv
@@ -50,15 +88,21 @@ def generate_charts(stock_list=None, data_date=None):
         logger.error(f"Error reading long_term_ticker.csv: {e}")
         long_term_tickers = ["QQQ"] # Fallback
 
-    logger.info(f"Generating Long Term Charts for: {long_term_tickers}")
+    logger.info(f"Processing Long Term Tickers: {long_term_tickers}")
 
-    for ticker in long_term_tickers:
-        try:
-            logger.info(f"Generating {ticker} Strong Stock Chart...")
-            filename = os.path.join(DATA_DIR, f"{ticker}_strong_stock.png")
-            generator.generate_chart(ticker, filename)
-        except Exception as e:
-            logger.error(f"Failed to generate {ticker} chart: {e}")
+    if is_update_time:
+        logger.info("Update Time: Generating new Strong Stock Charts...")
+        for ticker in long_term_tickers:
+            try:
+                filename = os.path.join(DATA_DIR, f"{ticker}_strong_stock.png")
+                generator.generate_chart(ticker, filename)
+            except Exception as e:
+                logger.error(f"Failed to generate {ticker} chart: {e}")
+    else:
+        logger.info("Not Update Time (Mon-Thu): Skipping chart generation, preserving previous charts.")
+
+    # Update unified JSON
+    update_unified_long_term_data(long_term_tickers, is_update_time, data_date)
 
     # Individual stock chart generation removed as requested
     # if not stock_list:
@@ -140,6 +184,32 @@ def run_long_term_process(force_weekend_mode=False):
 
     logger.info(f"Long Term Process: Target Friday is {target_friday}, End Date set to {calc_end_date_str}")
 
+    # Determine if we should update long-term data/charts
+    # We update if:
+    # 1. It is currently Friday (after close) or Weekend (is_market_closed_fri or is_weekend)
+    # 2. OR force_weekend_mode is True (manual override)
+    # 3. OR the data hasn't been fetched up to the target Friday yet (catch-up)
+
+    is_update_time = is_market_closed_fri or is_weekend or force_weekend_mode
+
+    # If it's Mon-Thu and not forced, we might still need to fetch data for short-term usage or if we missed last Friday,
+    # but strictly speaking, the USER REQUEST says "Mon-Thu hold last Friday's info".
+    # However, to hold "Last Friday's Info", we must ensure we HAVE Last Friday's data.
+    # The logic above already sets 'target_friday' to 'Last Friday' if it's Mon-Thu.
+    # So if we run the fetch/calc process with that target, we are effectively regenerating "Last Friday's" state.
+    # This is safe and ensures the data is correct even if the server restarted.
+    # The crucial part is NOT to update to "This Friday" (which doesn't exist yet) or partial week data.
+    # Since target_friday logic handles the date targeting correctly, we can proceed with fetch/calc.
+
+    # BUT, the request implies we shouldn't CHANGE the charts/json if it's Mon-Thu, perhaps to save resources or prevent partial updates?
+    # Actually, the request says: "Mon-Thu: hold last Friday's info". "Friday: update long term chart info".
+    # This implies that on Mon-Thu, we simply shouldn't overwrite the JSON with NEWER (partial) data.
+    # But since our 'target_friday' logic ALREADY points to Last Friday on Mon-Thu,
+    # re-running the process generates the SAME "Last Friday" data. This is idempotent and safe.
+    # So, we can run the fetch and calc every time.
+    # The only difference is maybe we don't need to re-generate the IMAGE if it already exists?
+    # Let's use 'is_update_time' to control mainly the IMAGE generation and the JSON 'last_updated' timestamp update if we want to be strict.
+
     if existing_data is not None and last_date is not None:
          start_date_dl = (last_date + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
          # Check if we need to update
@@ -164,10 +234,12 @@ def run_long_term_process(force_weekend_mode=False):
         return {}
 
     # 3. Run Calculations
+    # We should run calculations to ensure the data for the charts is ready
     run_calculation_scripts()
 
     # 4. Generate Charts (Screening Logic Removed)
-    generate_charts(None, data_date=data_date)
+    # Pass is_update_time to control image generation
+    generate_charts(None, data_date=data_date, is_update_time=is_update_time)
 
     # 5. Save JSON (Minimal for Notification compatibility)
     today_str = data_date.strftime('%Y%m%d')
