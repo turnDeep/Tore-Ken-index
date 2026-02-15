@@ -446,17 +446,57 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!configRes.ok) throw new Error("Failed to load config");
             const config = await configRes.json();
 
+            // 2. Fetch Unified Data
+            // We'll create a new endpoint /api/market-analysis-unified or update existing
+            // For now, let's assume we can fetch the unified JSON directly via a new endpoint
+            const dataRes = await fetchWithAuth('/api/market-analysis-unified');
+            let unifiedData = {};
+            if (dataRes.ok) {
+                unifiedData = await dataRes.json();
+            } else {
+                console.warn("Unified data endpoint failed, falling back to legacy...");
+            }
+
             const dynamicContainer = document.getElementById('dashboard-dynamic-content');
             dynamicContainer.innerHTML = ''; // Clear
 
-            // 2. Render Short Term Charts
-            for (const ticker of config.short_term) {
-                await renderMarketAnalysisSection(ticker, dynamicContainer);
+            // 3. Render Charts grouped by Ticker
+            const allTickers = Array.from(new Set([...config.short_term, ...config.long_term]));
+
+            for (const ticker of allTickers) {
+                const tickerData = unifiedData[ticker] || {};
+
+                // Render Short Term Chart if exists in config
+                if (config.short_term.includes(ticker)) {
+                    renderMarketAnalysisSection(ticker, tickerData.short_term, dynamicContainer);
+                }
+
+                // Render Long Term Chart if exists in config
+                if (config.long_term.includes(ticker)) {
+                    renderLongTermSection(ticker, tickerData.long_term, dynamicContainer);
+                }
             }
 
-            // 3. Render Long Term Charts
-            for (const ticker of config.long_term) {
-                renderLongTermSection(ticker, dynamicContainer);
+            // Update Global Last Updated based on first available timestamp from unified data
+            // Or just use the current time if successful
+            const lastUpdatedEl = document.getElementById('last-updated');
+            if (lastUpdatedEl) {
+                // Find the latest update time across all data
+                let latestTime = null;
+                Object.values(unifiedData).forEach(t => {
+                    if (t.short_term?.last_updated) {
+                        const time = new Date(t.short_term.last_updated);
+                        if (!latestTime || time > latestTime) latestTime = time;
+                    }
+                     if (t.long_term?.last_updated) {
+                        const time = new Date(t.long_term.last_updated);
+                        if (!latestTime || time > latestTime) latestTime = time;
+                    }
+                });
+
+                if (latestTime) {
+                    lastUpdatedEl.textContent = `Last updated: ${latestTime.toLocaleString('ja-JP')}`;
+                }
             }
 
         } catch (error) {
@@ -464,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function renderMarketAnalysisSection(ticker, container) {
+    function renderMarketAnalysisSection(ticker, shortTermData, container) {
         // Create HTML Structure
         const section = document.createElement('div');
         section.className = 'market-section';
@@ -483,26 +523,24 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         container.appendChild(section);
 
-        // Fetch Data
-        try {
-            const res = await fetchWithAuth(`/api/market-analysis?ticker=${ticker}`);
-            if (!res.ok) throw new Error(`Failed to load data for ${ticker}`);
-            const data = await res.json();
-
-            if (data.history && data.history.length > 0) {
-                // Use the latest data point
-                const latestItem = data.history[data.history.length - 1];
-                updateChartInfo(ticker, latestItem);
-
-                // Update global last updated (using first valid one)
-                const lastUpdatedEl = document.getElementById('last-updated');
-                if (lastUpdatedEl && data.last_updated) {
-                    lastUpdatedEl.textContent = `Last updated: ${new Date(data.last_updated).toLocaleString('ja-JP')}`;
-                }
-            }
-        } catch (e) {
-            console.error(e);
-            section.innerHTML += `<p style="color:red; text-align:center;">Failed to load data.</p>`;
+        // Use passed data if available, otherwise try fetch (legacy fallback)
+        if (shortTermData && shortTermData.history && shortTermData.history.length > 0) {
+             const latestItem = shortTermData.history[shortTermData.history.length - 1];
+             updateChartInfo(ticker, latestItem);
+        } else {
+            // Fallback fetch
+            fetchWithAuth(`/api/market-analysis?ticker=${ticker}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.history && data.history.length > 0) {
+                        const latestItem = data.history[data.history.length - 1];
+                        updateChartInfo(ticker, latestItem);
+                    }
+                })
+                .catch(e => {
+                    console.error(`Failed to load legacy data for ${ticker}`, e);
+                    section.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
+                });
         }
     }
 
@@ -524,13 +562,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderLongTermSection(ticker, container) {
+    function renderLongTermSection(ticker, longTermData, container) {
         const section = document.createElement('div');
         section.style.cssText = 'margin-top: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);';
 
         const title = document.createElement('h4');
         title.textContent = `${ticker} Analysis (Long Term)`;
         section.appendChild(title);
+
+        // Display metadata if available
+        if (longTermData) {
+            const infoDiv = document.createElement('div');
+            infoDiv.style.cssText = 'font-size: 0.85em; color: #666; margin-bottom: 5px; text-align: right;';
+            const dateStr = longTermData.data_date || (longTermData.last_updated ? new Date(longTermData.last_updated).toLocaleDateString() : 'Unknown');
+             // Status text from logic: "Updated" or "Initialized" (or "Last Friday" implied)
+             // We can show the data date which corresponds to the Friday used.
+            infoDiv.textContent = `Data Date: ${dateStr}`;
+            section.appendChild(infoDiv);
+        }
 
         const imgWrapper = document.createElement('div');
         const img = document.createElement('img');
@@ -539,7 +588,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Cache busting
         const ts = new Date().getTime();
-        img.src = `/api/stock-chart/${ticker}_strong_stock.png?t=${ts}`;
+        // Use URL from data or default
+        const srcUrl = (longTermData && longTermData.image_url) ? longTermData.image_url : `/api/stock-chart/${ticker}_strong_stock.png`;
+        img.src = `${srcUrl}?t=${ts}`;
 
         img.onerror = () => {
             section.style.display = 'none';

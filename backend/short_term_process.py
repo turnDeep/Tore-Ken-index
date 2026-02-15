@@ -6,6 +6,7 @@ import pandas as pd
 from backend.market_analysis_logic import get_market_analysis_data
 from backend.market_chart_generator import generate_market_chart
 from backend.market_bloodbath import calculate_market_bloodbath_data
+from backend.unified_data_manager import load_unified_data, save_unified_data
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 def run_short_term_process():
     """
     Generates Market Analysis Data (Short Term Charts) for tickers in short_term_ticker.csv.
+    Updates the unified JSON file (market_analysis.json).
     Returns the market data for the primary ticker (first in list).
     """
     logger.info("Starting Short Term Process...")
@@ -40,6 +42,8 @@ def run_short_term_process():
         logger.error(f"Failed to calculate bloodbath data: {e}")
         bloodbath_df = None
 
+    # Load Unified Data
+    unified_data = load_unified_data()
     primary_market_data = None # Will store the first ticker's data for legacy/notification support
 
     for i, ticker in enumerate(short_term_tickers):
@@ -51,7 +55,16 @@ def run_short_term_process():
             chart_path = os.path.join(DATA_DIR, f"{ticker}_market_chart.png")
             generate_market_chart(spy_df, chart_path)
 
-            # Save Data: {Ticker}_market_analysis.json
+            # Update Unified Data Structure
+            if ticker not in unified_data:
+                unified_data[ticker] = {}
+
+            unified_data[ticker]["short_term"] = {
+                "history": market_data,
+                "last_updated": datetime.datetime.now().isoformat()
+            }
+
+            # Save Data: {Ticker}_market_analysis.json (Legacy Support if needed, can keep for now)
             analysis_file = os.path.join(DATA_DIR, f"{ticker}_market_analysis.json")
             with open(analysis_file, "w") as f:
                 json.dump({
@@ -60,7 +73,8 @@ def run_short_term_process():
                     "last_updated": datetime.datetime.now().isoformat()
                 }, f)
 
-            # If first ticker, save as legacy 'market_chart.png' and 'market_analysis.json' for backward compatibility
+            # If first ticker, save as legacy 'market_chart.png' for backward compatibility
+            # Note: We no longer write to 'market_analysis.json' here as it's now the UNIFIED file.
             if i == 0:
                 primary_market_data = market_data
 
@@ -68,13 +82,8 @@ def run_short_term_process():
                 legacy_chart_path = os.path.join(DATA_DIR, "market_chart.png")
                 generate_market_chart(spy_df, legacy_chart_path)
 
-                # Legacy JSON
-                legacy_analysis_file = os.path.join(DATA_DIR, "market_analysis.json")
-                with open(legacy_analysis_file, "w") as f:
-                    json.dump({
-                        "history": market_data,
-                        "last_updated": datetime.datetime.now().isoformat()
-                    }, f)
+    # Save Unified Data
+    save_unified_data(unified_data)
 
     return primary_market_data
 

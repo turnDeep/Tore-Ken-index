@@ -17,6 +17,7 @@ from typing import Dict, Any, Optional
 # Import security manager
 from .security_manager import security_manager
 from .ws_manager import ws_manager
+from .unified_data_manager import load_unified_data
 import asyncio
 
 # Setup logging
@@ -262,7 +263,11 @@ def health_check():
 
 @app.get("/api/market-analysis")
 def get_market_analysis(ticker: Optional[str] = None, current_user: str = Depends(get_current_user)):
-    """Returns the market analysis chart data. Optionally filters by ticker."""
+    """
+    Returns the market analysis chart data.
+    If ticker is provided, returns the legacy individual file for backward compatibility.
+    If ticker is NOT provided, returns the UNIFIED market_analysis.json.
+    """
     filename = f"{ticker}_market_analysis.json" if ticker else "market_analysis.json"
     path = os.path.join(DATA_DIR, filename)
 
@@ -270,10 +275,21 @@ def get_market_analysis(ticker: Optional[str] = None, current_user: str = Depend
          # If specific ticker not found, try fallback or 404
          if ticker:
              raise HTTPException(status_code=404, detail=f"Analysis data for {ticker} not found.")
-         raise HTTPException(status_code=404, detail="Market analysis data not found.")
+         # If unified file not found, return empty dict to be safe (or 404)
+         # Returning empty dict mimics the behavior added to /api/market-analysis-unified
+         return {}
 
     with open(path, "r", encoding='utf-8') as f:
         return json.load(f)
+
+@app.get("/api/market-analysis-unified")
+def get_market_analysis_unified(current_user: str = Depends(get_current_user)):
+    """Returns the unified market analysis data for all tickers."""
+    data = load_unified_data()
+    if not data:
+        # Instead of 404, return empty object to prevent frontend crash on fresh install
+        return {}
+    return data
 
 @app.get("/api/market-chart.png")
 def get_market_chart(current_user: str = Depends(get_current_user_for_notification)):
