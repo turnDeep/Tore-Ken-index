@@ -466,14 +466,20 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const ticker of allTickers) {
                 const tickerData = unifiedData[ticker] || {};
 
+                // Create Main Ticker Section
+                const tickerSection = document.createElement('div');
+                tickerSection.className = 'market-section';
+                tickerSection.innerHTML = `<h3>${ticker} Analysis</h3>`;
+                dynamicContainer.appendChild(tickerSection);
+
                 // Render Short Term Chart if exists in config
                 if (config.short_term.includes(ticker)) {
-                    renderMarketAnalysisSection(ticker, tickerData.short_term, dynamicContainer);
+                    renderShortTermSubsection(ticker, tickerData.short_term, tickerSection);
                 }
 
                 // Render Long Term Chart if exists in config
                 if (config.long_term.includes(ticker)) {
-                    renderLongTermSection(ticker, tickerData.long_term, dynamicContainer);
+                    renderLongTermSubsection(ticker, tickerData.long_term, tickerSection);
                 }
             }
 
@@ -504,12 +510,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderMarketAnalysisSection(ticker, shortTermData, container) {
-        // Create HTML Structure
-        const section = document.createElement('div');
-        section.className = 'market-section';
-        section.innerHTML = `
-            <h3>Market Analysis (${ticker})</h3>
+    function renderShortTermSubsection(ticker, shortTermData, container) {
+        // Create Subsection Container
+        const wrapper = document.createElement('div');
+        wrapper.style.marginBottom = '20px'; // Spacing below this section
+
+        // Sub-subtitle
+        const subtitle = document.createElement('h4');
+        subtitle.textContent = "Short Term";
+        subtitle.style.cssText = "margin-bottom: 10px; font-weight: bold; color: #444;";
+        wrapper.appendChild(subtitle);
+
+        // Content
+        wrapper.innerHTML += `
             <div class="market-analysis-container">
                 <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
                     <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
@@ -521,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
-        container.appendChild(section);
+        container.appendChild(wrapper);
 
         // Use passed data if available, otherwise try fetch (legacy fallback)
         if (shortTermData && shortTermData.history && shortTermData.history.length > 0) {
@@ -539,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .catch(e => {
                     console.error(`Failed to load legacy data for ${ticker}`, e);
-                    section.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
+                    wrapper.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
                 });
         }
     }
@@ -562,23 +575,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderLongTermSection(ticker, longTermData, container) {
-        const section = document.createElement('div');
-        section.style.cssText = 'margin-top: 20px; padding: 10px; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);';
+    function renderLongTermSubsection(ticker, longTermData, container) {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-top: 20px; padding-top: 10px; border-top: 1px dashed #eee;';
 
-        const title = document.createElement('h4');
-        title.textContent = `${ticker} Analysis (Long Term)`;
-        section.appendChild(title);
+        const subtitle = document.createElement('h4');
+        subtitle.textContent = "Long Term";
+        subtitle.style.cssText = "margin-bottom: 10px; font-weight: bold; color: #444;";
+        wrapper.appendChild(subtitle);
 
         // Display metadata if available
         if (longTermData) {
             const infoDiv = document.createElement('div');
             infoDiv.style.cssText = 'font-size: 0.85em; color: #666; margin-bottom: 5px; text-align: right;';
             const dateStr = longTermData.data_date || (longTermData.last_updated ? new Date(longTermData.last_updated).toLocaleDateString() : 'Unknown');
-             // Status text from logic: "Updated" or "Initialized" (or "Last Friday" implied)
-             // We can show the data date which corresponds to the Friday used.
             infoDiv.textContent = `Data Date: ${dateStr}`;
-            section.appendChild(infoDiv);
+            wrapper.appendChild(infoDiv);
         }
 
         const imgWrapper = document.createElement('div');
@@ -593,13 +605,13 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = `${srcUrl}?t=${ts}`;
 
         img.onerror = () => {
-            section.style.display = 'none';
+            wrapper.style.display = 'none';
             console.log(`Missing long term chart for ${ticker}`);
         };
 
         imgWrapper.appendChild(img);
-        section.appendChild(imgWrapper);
-        container.appendChild(section);
+        wrapper.appendChild(imgWrapper);
+        container.appendChild(wrapper);
     }
 
     // --- Auto Reload Function ---
