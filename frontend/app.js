@@ -473,13 +473,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 dynamicContainer.appendChild(tickerSection);
 
                 // Render Short Term Chart if exists in config
+                const hasLongTerm = config.long_term.includes(ticker);
                 if (config.short_term.includes(ticker)) {
-                    renderShortTermSubsection(ticker, tickerData.short_term, tickerSection);
+                    // Only show analysis here if there is no Long Term section (e.g. SPY)
+                    const analysis = (!hasLongTerm) ? tickerData.gemini_analysis : null;
+                    renderShortTermSubsection(ticker, tickerData.short_term, tickerSection, analysis);
                 }
 
                 // Render Long Term Chart if exists in config
-                if (config.long_term.includes(ticker)) {
-                    renderLongTermSubsection(ticker, tickerData.long_term, tickerSection);
+                if (hasLongTerm) {
+                    renderLongTermSubsection(ticker, tickerData.long_term, tickerSection, tickerData.gemini_analysis);
                 }
             }
 
@@ -510,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderShortTermSubsection(ticker, shortTermData, container) {
+    function renderShortTermSubsection(ticker, shortTermData, container, aiAnalysis) {
         // Create Subsection Container
         const wrapper = document.createElement('div');
         wrapper.style.marginBottom = '20px'; // Spacing below this section
@@ -522,18 +525,25 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.appendChild(subtitle);
 
         // Content
-        wrapper.innerHTML += `
-            <div class="market-analysis-container">
-                <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
-                    <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
-                </div>
+        const contentDiv = document.createElement('div');
+        contentDiv.className = "market-analysis-container";
+        contentDiv.innerHTML = `
+            <div id="chart-wrapper-${ticker}" style="position: relative; width: 100%; overflow: hidden;">
+                <img id="chart-img-${ticker}" src="/api/stock-chart/${ticker}_market_chart.png" alt="${ticker} Chart" style="width: 100%; display: block;">
+            </div>
 
-                <div style="text-align: center; margin-top: 10px;">
-                    <span id="date-${ticker}" class="date-display">--</span>
-                    <span id="status-${ticker}" class="status-text status-neutral">--</span>
-                </div>
+            <div style="text-align: center; margin-top: 10px;">
+                <span id="date-${ticker}" class="date-display">--</span>
+                <span id="status-${ticker}" class="status-text status-neutral">--</span>
             </div>
         `;
+        wrapper.appendChild(contentDiv);
+
+        // AI Analysis (if provided)
+        if (aiAnalysis && aiAnalysis.text) {
+            renderAnalysisText(wrapper, aiAnalysis);
+        }
+
         container.appendChild(wrapper);
 
         // Use passed data if available, otherwise try fetch (legacy fallback)
@@ -552,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .catch(e => {
                     console.error(`Failed to load legacy data for ${ticker}`, e);
-                    wrapper.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
+                    contentDiv.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
                 });
         }
     }
@@ -575,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderLongTermSubsection(ticker, longTermData, container) {
+    function renderLongTermSubsection(ticker, longTermData, container, aiAnalysis) {
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'margin-top: 20px; padding-top: 10px; border-top: 1px dashed #eee;';
 
@@ -610,8 +620,42 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         imgWrapper.appendChild(img);
+
+        // AI Analysis (if provided)
+        if (aiAnalysis && aiAnalysis.text) {
+            renderAnalysisText(wrapper, aiAnalysis);
+        }
+
         wrapper.appendChild(imgWrapper);
         container.appendChild(wrapper);
+    }
+
+    function renderAnalysisText(container, aiAnalysis) {
+        const div = document.createElement('div');
+        div.className = "ai-analysis-box";
+        div.style.cssText = `
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #006B6B;
+            border-radius: 4px;
+            font-size: 0.95em;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-wrap; /* Preserve newlines */
+        `;
+
+        const header = document.createElement('div');
+        header.style.cssText = "font-weight: bold; margin-bottom: 8px; color: #006B6B; display: flex; justify-content: space-between;";
+        header.innerHTML = `<span>🤖 AI Market Analysis</span> <span style="font-size:0.8em; color:#999;">${new Date(aiAnalysis.last_updated).toLocaleDateString()}</span>`;
+
+        div.appendChild(header);
+
+        const content = document.createElement('div');
+        content.textContent = aiAnalysis.text;
+        div.appendChild(content);
+
+        container.appendChild(div);
     }
 
     // --- Auto Reload Function ---

@@ -8,6 +8,8 @@ from backend.long_term_process import run_long_term_process
 from backend.short_term_process import run_short_term_process
 from backend.security_manager import security_manager
 from backend.get_tickers import update_stock_csv_from_fmp
+from backend.news_fetcher import fetch_news_for_tickers, save_news_to_json
+from backend.gemini_analyzer import run_gemini_analysis
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -140,6 +142,20 @@ def fetch_and_notify(run_short=True, run_long=True):
                 "status_text": "Short Term Only",
                 "market_status": "Neutral"
             }
+
+        # 3. AI Analysis (News + Gemini)
+        # We run this if at least one chart process ran (usually both)
+        # Fetches news and updates market_analysis.json with AI insights
+        try:
+            logger.info("Starting AI Analysis Pipeline...")
+            tickers = ["SPY", "QQQ", "SOXX", "GLD"] # Or read from config/CSVs
+            news = fetch_news_for_tickers(tickers)
+            save_news_to_json(news)
+
+            # Generate Gemini Analysis
+            run_gemini_analysis()
+        except Exception as e:
+            logger.error(f"AI Analysis Pipeline Failed: {e}")
 
         # Merge Market Status into daily_data if available (Using Primary Ticker)
         if daily_data and primary_market_data:
