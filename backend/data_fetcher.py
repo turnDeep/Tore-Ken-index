@@ -9,10 +9,14 @@ from backend.short_term_process import run_short_term_process
 from backend.gemini_analysis import generate_gemini_analysis
 from backend.security_manager import security_manager
 from backend.get_tickers import update_stock_csv_from_fmp
+from dotenv import load_dotenv
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 # Determine paths
 PROJECT_ROOT = os.getcwd()
