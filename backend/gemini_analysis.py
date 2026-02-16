@@ -112,7 +112,9 @@ def generate_gemini_analysis():
     prompt += "【短期（日足）】\n"
     prompt += "- Trend: Green=上昇トレンド, Red=下落トレンド\n"
     prompt += "- Bloodbath: 「暴落シグナル」。Safe=安全, Warning=警戒, Danger=危険\n"
+    prompt += "- TSV (Time Segmented Volume): 資金流出入。Bull=買い優勢, Bear=売り優勢\n"
     prompt += "【長期（週足）】\n"
+    prompt += "- ATR Trailing Stop: トレンドフォロー指標。Buy=買いシグナル, Sell=売りシグナル\n"
     prompt += "- RS Rating (Relative Strength): 市場全体に対する相対的な強さ（0-100）。80以上は強い。\n"
     prompt += "- Zone: RSとそのモメンタムに基づく状態区分。\n"
     prompt += "  - Leading: 先導（強い）\n"
@@ -144,12 +146,16 @@ def generate_gemini_analysis():
         prompt += f"【{ticker} データ概要】\n"
         if short_term:
             latest = short_term[-1]
-            prompt += f"短期（日足）: 日付={latest.get('date')}, 終値={latest.get('close')}, Volume={latest.get('volume')}, Bloodbath={latest.get('bloodbath_label')}, トレンド={latest.get('trend_color')}\n"
+            # Try to get TSV signal if available, otherwise default to N/A
+            tsv_signal = latest.get('tsv_signal', 'N/A')
+            prompt += f"短期（日足）: 日付={latest.get('date')}, 終値={latest.get('close')}, Volume={latest.get('volume')}, Bloodbath={latest.get('bloodbath_label')}, トレンド={latest.get('trend_color')}, TSV={tsv_signal}\n"
 
         if long_term:
              if isinstance(long_term, list) and len(long_term) > 0:
                  latest_lt = long_term[-1]
-                 prompt += f"長期（週足）: 日付={latest_lt.get('date')}, RS Rating={latest_lt.get('rs_rating', 'N/A')}, Zone={latest_lt.get('zone_label', 'N/A')}\n"
+                 # Try to get ATR signal if available
+                 atr_signal = latest_lt.get('atr_signal', 'N/A')
+                 prompt += f"長期（週足）: 日付={latest_lt.get('date')}, ATR Signal={atr_signal}, RS Rating={latest_lt.get('rs_rating', 'N/A')}, Zone={latest_lt.get('zone_label', 'N/A')}\n"
         prompt += "\n"
 
     # 4. Call Gemini API
