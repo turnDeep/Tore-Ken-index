@@ -108,6 +108,18 @@ def generate_gemini_analysis():
     prompt += "回答は必ず以下のJSONフォーマットで出力してください。Markdownのコードブロックなどは含めないでください。\n"
     prompt += '{\n  "SPY": "分析テキスト...",\n  "QQQ": "分析テキスト...",\n  "SOXX": "分析テキスト...",\n  "GLD": "分析テキスト..."\n}\n\n'
 
+    prompt += "--- インジケータ解説 ---\n"
+    prompt += "【短期（日足）】\n"
+    prompt += "- Trend: Green=上昇トレンド, Red=下落トレンド\n"
+    prompt += "- Bloodbath: 「暴落シグナル」。Safe=安全, Warning=警戒, Danger=危険\n"
+    prompt += "【長期（週足）】\n"
+    prompt += "- RS Rating (Relative Strength): 市場全体に対する相対的な強さ（0-100）。80以上は強い。\n"
+    prompt += "- Zone: RSとそのモメンタムに基づく状態区分。\n"
+    prompt += "  - Leading: 先導（強い）\n"
+    prompt += "  - Weakening: 弱含み（調整中）\n"
+    prompt += "  - Lagging: 遅行（弱い）\n"
+    prompt += "  - Improving: 改善（回復中）\n\n"
+
     prompt += "--- ニュース情報 ---\n"
     for ticker, items in news_data.items():
         prompt += f"【{ticker} ニュース】\n"
