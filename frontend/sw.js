@@ -1,4 +1,38 @@
 // frontend/sw.js
+const CACHE_NAME = 'tore-ken-cache-v3';
+const ASSETS_TO_CACHE = [
+    '/',
+    '/index.html',
+    '/style.css',
+    '/app.js',
+    '/icons/icon-192x192.png',
+    '/icons/icon-512x512.png',
+    'https://cdn.plot.ly/plotly-2.35.2.min.js'
+];
+
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.addAll(ASSETS_TO_CACHE);
+        })
+    );
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheName !== CACHE_NAME) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        })
+    );
+    self.clients.claim();
+});
 
 // Push通知受信
 self.addEventListener('push', event => {
