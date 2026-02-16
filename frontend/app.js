@@ -474,12 +474,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Render Short Term Chart if exists in config
                 if (config.short_term.includes(ticker)) {
-                    renderShortTermSubsection(ticker, tickerData.short_term, tickerSection);
+                    renderShortTermSubsection(ticker, tickerData.short_term, tickerSection, tickerData);
                 }
 
                 // Render Long Term Chart if exists in config
                 if (config.long_term.includes(ticker)) {
-                    renderLongTermSubsection(ticker, tickerData.long_term, tickerSection);
+                    renderLongTermSubsection(ticker, tickerData.long_term, tickerSection, tickerData);
                 }
             }
 
@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderShortTermSubsection(ticker, shortTermData, container) {
+    function renderShortTermSubsection(ticker, shortTermData, container, allTickerData) {
         // Create Subsection Container
         const wrapper = document.createElement('div');
         wrapper.style.marginBottom = '20px'; // Spacing below this section
@@ -555,6 +555,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     wrapper.innerHTML += `<p style="color:red; text-align:center;">Data unavailable.</p>`;
                 });
         }
+
+        // Render Gemini Analysis for SPY here (below Short Term chart)
+        if (ticker === 'SPY' && allTickerData && allTickerData.gemini_analysis) {
+            renderGeminiAnalysis(wrapper, allTickerData.gemini_analysis);
+        }
     }
 
     function updateChartInfo(ticker, item) {
@@ -575,7 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderLongTermSubsection(ticker, longTermData, container) {
+    function renderLongTermSubsection(ticker, longTermData, container, allTickerData) {
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'margin-top: 20px; padding-top: 10px; border-top: 1px dashed #eee;';
 
@@ -612,6 +617,42 @@ document.addEventListener('DOMContentLoaded', () => {
         imgWrapper.appendChild(img);
         wrapper.appendChild(imgWrapper);
         container.appendChild(wrapper);
+
+        // Render Gemini Analysis for QQQ, SOXX, GLD here (below Long Term chart)
+        // Check if ticker is NOT SPY (since SPY is handled in short term)
+        if (ticker !== 'SPY' && allTickerData && allTickerData.gemini_analysis) {
+            renderGeminiAnalysis(container, allTickerData.gemini_analysis);
+        }
+    }
+
+    function renderGeminiAnalysis(container, analysisData) {
+        if (!analysisData || !analysisData.content) return;
+
+        const analysisDiv = document.createElement('div');
+        analysisDiv.className = 'gemini-analysis';
+        analysisDiv.style.cssText = `
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #006B6B;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        `;
+
+        analysisDiv.innerHTML = \`
+            <div class="gemini-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e9ecef;">
+                <span class="ai-icon" style="font-weight: bold; color: #006B6B;">🤖 AI解説 (Gemini)</span>
+                <span class="update-time" style="font-size: 0.8em; color: #6c757d;">\${new Date(analysisData.updated_at).toLocaleString()}</span>
+            </div>
+        \`;
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'gemini-content';
+        contentDiv.style.cssText = "font-size: 0.95em; line-height: 1.6; color: #333; white-space: pre-wrap;";
+        contentDiv.textContent = analysisData.content;
+
+        analysisDiv.appendChild(contentDiv);
+        container.appendChild(analysisDiv);
     }
 
     // --- Auto Reload Function ---

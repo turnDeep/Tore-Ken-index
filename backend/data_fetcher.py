@@ -6,6 +6,7 @@ import logging
 from pywebpush import webpush, WebPushException
 from backend.long_term_process import run_long_term_process
 from backend.short_term_process import run_short_term_process
+from backend.gemini_analysis import generate_gemini_analysis
 from backend.security_manager import security_manager
 from backend.get_tickers import update_stock_csv_from_fmp
 
@@ -140,6 +141,13 @@ def fetch_and_notify(run_short=True, run_long=True):
                 "status_text": "Short Term Only",
                 "market_status": "Neutral"
             }
+
+        # 3. Gemini Analysis (Run if either short or long process ran)
+        if run_short or run_long:
+            try:
+                generate_gemini_analysis()
+            except Exception as e:
+                logger.error(f"Gemini Analysis failed: {e}")
 
         # Merge Market Status into daily_data if available (Using Primary Ticker)
         if daily_data and primary_market_data:
