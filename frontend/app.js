@@ -639,12 +639,12 @@ document.addEventListener('DOMContentLoaded', () => {
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         `;
 
-        analysisDiv.innerHTML = \`
+        analysisDiv.innerHTML = `
             <div class="gemini-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e9ecef;">
                 <span class="ai-icon" style="font-weight: bold; color: #006B6B;">🤖 AI解説 (Gemini)</span>
-                <span class="update-time" style="font-size: 0.8em; color: #6c757d;">\${new Date(analysisData.updated_at).toLocaleString()}</span>
+                <span class="update-time" style="font-size: 0.8em; color: #6c757d;">${new Date(analysisData.updated_at).toLocaleString()}</span>
             </div>
-        \`;
+        `;
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'gemini-content';
