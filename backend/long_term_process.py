@@ -192,6 +192,19 @@ def run_long_term_process(force_weekend_mode=False):
 
     is_update_time = is_market_closed_fri or is_weekend or force_weekend_mode
 
+    # Check if images exist. If not, force update regardless of day.
+    # This handles the case of a fresh deploy on Mon-Thu.
+    try:
+        csv_path_check = os.path.join(os.path.dirname(__file__), 'long_term_ticker.csv')
+        check_df = pd.read_csv(csv_path_check)
+        check_tickers = check_df['Ticker'].unique().tolist()
+        missing_images = any(not os.path.exists(os.path.join(DATA_DIR, f"{t}_strong_stock.png")) for t in check_tickers)
+        if missing_images:
+            logger.info("Missing chart images detected. Forcing chart generation.")
+            is_update_time = True
+    except Exception as e:
+        logger.warning(f"Could not check for existing images: {e}")
+
     # If it's Mon-Thu and not forced, we might still need to fetch data for short-term usage or if we missed last Friday,
     # but strictly speaking, the USER REQUEST says "Mon-Thu hold last Friday's info".
     # However, to hold "Last Friday's Info", we must ensure we HAVE Last Friday's data.
