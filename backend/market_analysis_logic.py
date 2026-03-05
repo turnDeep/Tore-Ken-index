@@ -217,8 +217,9 @@ def get_market_analysis_data(ticker="SPY", period="6mo", bloodbath_df=None):
                 # Left join to keep SPY dates
                 df = df.join(bloodbath_df, how='left')
                 # Fill NaN with 0 or previous value? Fill 0 for safety if missing.
-                df['New_Lows_Ratio'] = df['New_Lows_Ratio'].fillna(0.0)
-                df['Climax_Entry'] = df['Climax_Entry'].fillna(False)
+                # Use ffill() first to carry over Friday's bloodbath data to weekend crypto dates, then fillna(0.0) for leading NaNs
+                df['New_Lows_Ratio'] = df['New_Lows_Ratio'].ffill().fillna(0.0)
+                df['Climax_Entry'] = df['Climax_Entry'].ffill().fillna(False)
             else:
                 df['New_Lows_Ratio'] = 0.0
                 df['Climax_Entry'] = False
