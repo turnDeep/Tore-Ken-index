@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.appendChild(imgWrapper);
         container.appendChild(wrapper);
 
-        // Render Gemini Analysis for QQQ, SOXX, GLD here (below Long Term chart)
+        // Render Gemini Analysis for QQQ, SOXX, GLD, BTC-USD here (below Long Term chart)
         // Check if ticker is NOT SPY (since SPY is handled in short term)
         if (ticker !== 'SPY' && allTickerData && allTickerData.gemini_analysis) {
             renderGeminiAnalysis(container, allTickerData.gemini_analysis);
