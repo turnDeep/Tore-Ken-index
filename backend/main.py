@@ -304,6 +304,7 @@ def get_stock_chart(filename: str, current_user: str = Depends(get_current_user_
     """Returns a specific stock chart image (e.g., YYYYMMDD-TICKER.png). Allows cookie auth."""
     # Validate filename to prevent path traversal
     # Allowed: alphanumeric, underscore, hyphen, dot, and caret (^) for specific tickers
+    # Allow letters, numbers, hyphens, underscores, dots, carets
     if not re.match(r'^[\w\-\.\^]+\.png$', filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
