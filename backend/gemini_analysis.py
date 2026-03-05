@@ -92,7 +92,7 @@ def generate_gemini_analysis():
         return
 
     # 1. Fetch News
-    target_tickers = ["SPY", "QQQ", "SOXX", "GLD"]
+    target_tickers = ["SPY", "QQQ", "SOXX", "GLD", "BTC-USD"]
     news_data = {}
     for ticker in target_tickers:
         logger.info(f"Fetching news for {ticker}...")
@@ -104,9 +104,9 @@ def generate_gemini_analysis():
     unified_data = load_unified_data()
 
     # 3. Construct Prompt
-    prompt = "あなたはプロの金融アナリストです。以下のデータ（ニュースとテクニカル分析データ）に基づき、SPY, QQQ, SOXX, GLD の現状と今後について、それぞれ1000文字程度で「AI解説」を作成してください。\n"
+    prompt = "あなたはプロの金融アナリストです。以下のデータ（ニュースとテクニカル分析データ）に基づき、SPY, QQQ, SOXX, GLD, BTC-USD の現状と今後について、それぞれ1000文字程度で「AI解説」を作成してください。\n"
     prompt += "回答は必ず以下のJSONフォーマットで出力してください。Markdownのコードブロックなどは含めないでください。\n"
-    prompt += '{\n  "SPY": "分析テキスト...",\n  "QQQ": "分析テキスト...",\n  "SOXX": "分析テキスト...",\n  "GLD": "分析テキスト..."\n}\n\n'
+    prompt += '{\n  "SPY": "分析テキスト...",\n  "QQQ": "分析テキスト...",\n  "SOXX": "分析テキスト...",\n  "GLD": "分析テキスト...",\n  "BTC-USD": "分析テキスト..."\n}\n\n'
 
     prompt += "--- インジケータ解説 ---\n"
     prompt += "【短期（日足）】\n"
