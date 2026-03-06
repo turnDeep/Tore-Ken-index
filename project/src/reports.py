@@ -42,7 +42,7 @@ def calculate_metrics(history_df, trades_df=None):
     daily_win_rate = len(daily_returns[daily_returns > 0]) / len(daily_returns) if len(daily_returns) > 0 else 0.0
 
     # Monthly Win Rate
-    monthly_returns = equity_series.resample('M').last().pct_change().dropna()
+    monthly_returns = equity_series.resample('ME').last().pct_change().dropna()
     monthly_win_rate = len(monthly_returns[monthly_returns > 0]) / len(monthly_returns) if len(monthly_returns) > 0 else 0.0
 
     # Crisis Period Return

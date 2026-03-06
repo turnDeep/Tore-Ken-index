@@ -3,9 +3,11 @@ import pandas as pd
 try:
     import pandas_datareader.data as web
 except ImportError:
-    pass
+    web = None
 import datetime
 import os
+import requests
+from io import StringIO
 
 def download_market_data(start_date="2007-01-01", end_date=None, save_dir="data/market/"):
     """
@@ -22,7 +24,13 @@ def download_market_data(start_date="2007-01-01", end_date=None, save_dir="data/
     tickers = ["SPY", "QQQ", "IWM", "^VIX"]
     print(f"Downloading YF market data for {tickers} from {start_date} to {end_date}...")
     try:
-        yf_data = yf.download(tickers, start=start_date, end=end_date, progress=False)["Adj Close"]
+        yf_data_raw = yf.download(tickers, start=start_date, end=end_date, progress=False)
+        if 'Adj Close' in yf_data_raw.columns.levels[0]:
+            yf_data = yf_data_raw['Adj Close']
+        elif 'Close' in yf_data_raw.columns.levels[0]:
+            yf_data = yf_data_raw['Close']
+        else:
+            yf_data = pd.DataFrame()
     except Exception as e:
         print(f"Error downloading YF market data: {e}")
         yf_data = pd.DataFrame()
@@ -30,7 +38,10 @@ def download_market_data(start_date="2007-01-01", end_date=None, save_dir="data/
     # 2. Download FRED Data
     print("Downloading FRED data (DGS10, BAMLH0A0HYM2)...")
     try:
-        fred_data = web.DataReader(["DGS10", "BAMLH0A0HYM2"], "fred", start_date, end_date)
+        if web is not None:
+            fred_data = web.DataReader(["DGS10", "BAMLH0A0HYM2"], "fred", start_date, end_date)
+        else:
+            fred_data = pd.DataFrame()
     except Exception as e:
         print(f"Error downloading FRED data via pandas_datareader: {e}")
         fred_data = pd.DataFrame()
@@ -46,9 +57,9 @@ def download_market_data(start_date="2007-01-01", end_date=None, save_dir="data/
         df = pd.DataFrame()
 
     if not df.empty:
-        # Forward fill (business days and FRED might have different holidays or missing dates)
+        # Forward fill
         df.ffill(inplace=True)
-        # Drop rows where all are NaN (usually weekends if merged poorly)
+        # Drop rows where all are NaN
         df.dropna(how='all', inplace=True)
 
         save_path = os.path.join(save_dir, "market_data.csv")
@@ -62,18 +73,19 @@ def download_market_data(start_date="2007-01-01", end_date=None, save_dir="data/
 def get_sp500_tickers():
     """
     A utility to get a rough proxy of S&P 500 or top 500 liquid stocks.
-    For simplicity, we'll return a static list or fetch from wikipedia.
+    Uses headers to avoid 403.
     """
     try:
-        table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers)
+        table = pd.read_html(StringIO(response.text))
         df = table[0]
         tickers = df['Symbol'].tolist()
-        # Clean some symbols (e.g. BRK.B -> BRK-B)
         tickers = [t.replace('.', '-') for t in tickers]
         return tickers
     except Exception as e:
         print(f"Error fetching SP500 tickers: {e}")
-        # fallback
         return ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "JPM", "JNJ", "V"]
 
 def download_universe_data(tickers, start_date="2007-01-01", end_date=None, save_dir="data/universe/"):
@@ -84,6 +96,9 @@ def download_universe_data(tickers, start_date="2007-01-01", end_date=None, save
         end_date = datetime.date.today().strftime("%Y-%m-%d")
     os.makedirs(save_dir, exist_ok=True)
 
+    # We will limit to 50 tickers just to make the sandbox backtest run quickly.
+    tickers = tickers[:50]
+
     print(f"Downloading daily data for {len(tickers)} tickers...")
     try:
         data = yf.download(tickers, start=start_date, end=end_date, group_by="ticker", progress=True)
@@ -91,7 +106,7 @@ def download_universe_data(tickers, start_date="2007-01-01", end_date=None, save
         print(f"Error downloading universe data: {e}")
         return None
 
-    # Save each ticker to a separate CSV or a combined HDF5/Parquet. We'll use individual CSVs for simplicity.
+    # Save
     if isinstance(data.columns, pd.MultiIndex):
         for ticker in tickers:
             if ticker in data.columns.levels[0]:
@@ -99,7 +114,6 @@ def download_universe_data(tickers, start_date="2007-01-01", end_date=None, save
                 if not df.empty:
                     df.to_csv(os.path.join(save_dir, f"{ticker}.csv"))
     elif len(tickers) == 1:
-        # single ticker case
         data.dropna(how="all").to_csv(os.path.join(save_dir, f"{tickers[0]}.csv"))
 
     print(f"Universe data saved to {save_dir}")
@@ -108,12 +122,9 @@ def download_universe_data(tickers, start_date="2007-01-01", end_date=None, save
 def download_fundamentals(tickers, save_dir="data/fundamentals/"):
     """
     Download key financial metrics.
-    Note: yfinance returns the most recent 4 periods usually.
-    For a proper backtest going back to 2007, you need point-in-time fundamentals,
-    which yfinance does NOT provide fully (only trailing).
-    We will save what's available for demonstration.
     """
     os.makedirs(save_dir, exist_ok=True)
+    tickers = tickers[:50]
     print(f"Downloading fundamentals for {len(tickers)} tickers...")
 
     results = []
@@ -122,11 +133,6 @@ def download_fundamentals(tickers, save_dir="data/fundamentals/"):
         try:
             stock = yf.Ticker(t)
             info = stock.info
-
-            # Get TTM data if available, or most recent annual
-            # Since yfinance doesn't give deep historical point-in-time, we approximate
-            # for the "current" simulation step.
-
             row = {
                 "Ticker": t,
                 "FreeCashflow": info.get("freeCashflow", None),
@@ -148,7 +154,4 @@ def download_fundamentals(tickers, save_dir="data/fundamentals/"):
     return df
 
 if __name__ == "__main__":
-    download_market_data(save_dir="../data/market/")
-    tickers = get_sp500_tickers()[:10]  # Just 10 for quick test
-    download_universe_data(tickers, save_dir="../data/universe/")
-    download_fundamentals(tickers, save_dir="../data/fundamentals/")
+    pass

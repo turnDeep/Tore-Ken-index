@@ -14,7 +14,7 @@ class BacktestEngine:
         self.universe_dir = universe_dir
         self.fundamentals_path = fundamentals_path
         self.start_date = pd.to_datetime(start_date)
-        self.end_date = pd.to_datetime(end_date)
+        self.end_date = pd.to_datetime(end_date) if end_date else pd.to_datetime('today')
         self.initial_capital = initial_capital
 
         self.portfolio = [] # List of dicts: {'Ticker': str, 'entry_price': float, 'shares': float, 'half_sold': bool}
